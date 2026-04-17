@@ -1,0 +1,1139 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import Papa from "papaparse";
+import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
+import { Star, Trash2, UploadCloud, ChevronDown, ChevronUp, Plus, Archive, ArrowUpDown, Edit2, Search } from "lucide-react";
+import { useAddWord, WordInput } from "@/hooks/useAddWord";
+import { ConflictResolutionModal } from "@/components/ConflictResolutionModal";
+import { EditWordModal, getDifficultyFromRank } from "@/components/EditWordModal";
+import { ImportSummaryModal } from "@/components/ImportSummaryModal";
+import { BatchEditModal } from "@/components/BatchEditModal";
+import { PracticeSelectionModal } from "@/components/PracticeSelectionModal";
+
+interface CsvRow {
+  "Greek Word"?: string;
+  "French Translation"?: string;
+  "Part of Speech"?: string;
+  Group?: string;
+  [key: string]: string | undefined;
+}
+
+type SortField = "smart" | "greek_text" | "french_text" | "theme" | "success" | "frequency" | "review_count" | "heat";
+type SortDirection = "asc" | "desc";
+
+export default function VaultPage() {
+  const router = useRouter();
+  const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  const [activeTab, setActiveTab] = useState<"my_library" | "added_by_others" | "removed">("my_library");
+  const [myLibrary, setMyLibrary] = useState<any[]>([]);
+  const [othersLibrary, setOthersLibrary] = useState<any[]>([]);
+  const [isLoadingVocab, setIsLoadingVocab] = useState(false);
+  const [showUploader, setShowUploader] = useState(false);
+  const [selectedWordIds, setSelectedWordIds] = useState<Set<string>>(new Set());
+
+  // Sorting
+  const [sortField, setSortField] = useState<SortField>("smart");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+
+  // Filtering
+  const [filterTheme, setFilterTheme] = useState<string>("");
+  const [filterSuccessMin, setFilterSuccessMin] = useState<number | "">("");
+  const [filterSuccessMax, setFilterSuccessMax] = useState<number | "">("");
+  const [filterFreqMin, setFilterFreqMin] = useState<number | "">("");
+  const [filterFreqMax, setFilterFreqMax] = useState<number | "">("");
+  const [filterReviewMin, setFilterReviewMin] = useState<number | "">("");
+  const [filterReviewMax, setFilterReviewMax] = useState<number | "">("");
+  const [filterStatus, setFilterStatus] = useState<"all" | "fav">("all");
+  const [filterPOS, setFilterPOS] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const [editingWord, setEditingWord] = useState<any | null>(null);
+  const [isBatchEditing, setIsBatchEditing] = useState(false);
+  const [showPracticeModal, setShowPracticeModal] = useState(false);
+  
+  const [visibleCount, setVisibleCount] = useState(50);
+
+  // Reset visible count when filters or sorting change
+  useEffect(() => {
+    setVisibleCount(50);
+  }, [activeTab, sortField, sortDirection, filterTheme, filterSuccessMin, filterSuccessMax, filterFreqMin, filterFreqMax, filterReviewMin, filterReviewMax, filterStatus, searchQuery, filterPOS]);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop <= clientHeight + 100) {
+      setVisibleCount(prev => prev + 50);
+    }
+  };
+  
+  const [importSummary, setImportSummary] = useState<{
+    isOpen: boolean;
+    total: number;
+    byTheme: Record<string, number>;
+    byDifficulty: Record<string, number>;
+  } | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { addWords, isAdding, conflictState } = useAddWord();
+
+  const fetchVocab = useCallback(async () => {
+    if (!userId) return;
+    setIsLoadingVocab(true);
+    
+    const { data: myData, error: myError } = await supabase
+      .from("user_word_settings")
+      .select(`
+        *,
+        words_dim (*)
+      `)
+      .eq("user_id", userId);
+
+    if (myError) {
+      toast.error(`Failed to fetch your library: ${myError.message}`);
+    } else {
+      setMyLibrary(myData || []);
+    }
+
+    const { data: allWords, error: othersError } = await supabase
+      .from("words_dim")
+      .select(`
+        *,
+        user_word_settings ( user_id )
+      `);
+
+    if (othersError) {
+      toast.error(`Failed to fetch other words: ${othersError.message}`);
+    } else {
+      const others = (allWords || []).filter(w => {
+        const hasSetting = w.user_word_settings?.some((s: any) => s.user_id === userId);
+        return !hasSetting;
+      });
+      setOthersLibrary(others);
+    }
+    
+    setIsLoadingVocab(false);
+  }, [userId]);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data, error }) => {
+      if (error || !data.user) {
+        router.replace("/login");
+      } else {
+        setUserId(data.user.id);
+        setIsAuthChecking(false);
+      }
+    });
+  }, [router]);
+
+  useEffect(() => {
+    if (userId) {
+      fetchVocab();
+    }
+  }, [userId, fetchVocab]);
+
+  const processFile = useCallback(async (file: File) => {
+    if (!file.name.endsWith(".csv")) {
+      toast.error("Please upload a CSV file.");
+      return;
+    }
+
+    setFileName(file.name);
+    setIsUploading(true);
+
+    try {
+      Papa.parse<CsvRow>(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: async (results) => {
+          const rows: WordInput[] = results.data
+            .map((row) => ({
+              greek_text: (row["Greek Word"] ?? "").trim(),
+              french_text: (row["French Translation"] ?? "").trim(),
+              part_of_speech: (row["Part of Speech"] ?? "").trim(),
+              theme: (row["Group"] ?? "").trim(),
+            }))
+            .filter((r) => r.greek_text);
+
+          if (rows.length === 0) {
+            toast.error("No valid rows found in the CSV.");
+            setIsUploading(false);
+            return;
+          }
+
+          const result = await addWords(rows);
+
+          if (result && result.stats && result.stats.length > 0) {
+            const byTheme: Record<string, number> = {};
+            const byDifficulty: Record<string, number> = {};
+            
+            result.stats.forEach((s: any) => {
+              const theme = s.theme || 'General';
+              byTheme[theme] = (byTheme[theme] || 0) + 1;
+              const diff = getDifficultyFromRank(s.frequency_rank);
+              byDifficulty[diff] = (byDifficulty[diff] || 0) + 1;
+            });
+            
+            setImportSummary({
+              isOpen: true,
+              total: result.stats.length,
+              byTheme,
+              byDifficulty
+            });
+          }
+
+          setFileName(null);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+          fetchVocab(); 
+          setShowUploader(false);
+          setIsUploading(false);
+        },
+        error: (err) => {
+          toast.error(`CSV parse error: ${err.message}`);
+          setIsUploading(false);
+        },
+      });
+    } catch (err) {
+      toast.error("An unexpected error occurred.");
+      console.error(err);
+      setIsUploading(false);
+    }
+  }, [addWords, fetchVocab]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+  };
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) processFile(file);
+  };
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+  const handleDragLeave = () => setIsDragging(false);
+
+  const toggleFav = async (word_id: string, currentFav: boolean) => {
+    setMyLibrary((prev) => 
+      prev.map((v) => v.word_id === word_id ? { ...v, is_fav: !currentFav } : v)
+    );
+    const { error } = await supabase
+      .from("user_word_settings")
+      .update({ is_fav: !currentFav })
+      .eq("word_id", word_id)
+      .eq("user_id", userId);
+    if (error) {
+      toast.error(`Failed to update favorite status: ${error.message}`);
+      fetchVocab();
+    }
+  };
+
+  const archiveWord = async (word_id: string, currentArchived: boolean) => {
+    setMyLibrary((prev) => 
+      prev.map((v) => v.word_id === word_id ? { ...v, is_archived: !currentArchived } : v)
+    );
+    const { error } = await supabase
+      .from("user_word_settings")
+      .update({ is_archived: !currentArchived })
+      .eq("word_id", word_id)
+      .eq("user_id", userId);
+    if (error) {
+      toast.error(`Failed to update status: ${error.message}`);
+      fetchVocab();
+    }
+  };
+
+  const addToMyLibrary = async (word: any) => {
+    const wordInput: WordInput = {
+      greek_text: word.greek_text,
+      french_text: word.french_text,
+      part_of_speech: word.part_of_speech,
+      theme: word.theme,
+    };
+    await addWords([wordInput]);
+    fetchVocab();
+  };
+
+  const addSelectedToMyLibrary = async () => {
+    const selectedWords = othersLibrary.filter(w => selectedWordIds.has(w.id));
+    const wordInputs: WordInput[] = selectedWords.map(w => ({
+      greek_text: w.greek_text,
+      french_text: w.french_text,
+      part_of_speech: w.part_of_speech,
+      theme: w.theme,
+    }));
+    await addWords(wordInputs);
+    setSelectedWordIds(new Set());
+    fetchVocab();
+  };
+
+  // Sorting Handler
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="w-3 h-3 text-gray-300 inline-block ml-1" />;
+    return sortDirection === "asc" 
+      ? <ChevronUp className="w-3 h-3 text-gray-700 inline-block ml-1" />
+      : <ChevronDown className="w-3 h-3 text-gray-700 inline-block ml-1" />;
+  };
+
+  // Filter and Sort Data
+  const displayedLibrary = useMemo(() => {
+    let data = myLibrary.filter(w => !w.is_archived);
+
+    // Filters
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      data = data.filter(item => 
+        (item.words_dim?.greek_text || "").toLowerCase().includes(q) ||
+        (item.words_dim?.french_text || "").toLowerCase().includes(q)
+      );
+    }
+    
+    if (filterTheme) {
+      data = data.filter(item => item.words_dim?.theme === filterTheme);
+    }
+    if (filterPOS) {
+      data = data.filter(item => item.words_dim?.part_of_speech === filterPOS);
+    }
+    if (filterStatus === "fav") {
+      data = data.filter(item => item.is_fav);
+    }
+
+    if (filterSuccessMin !== "") {
+      data = data.filter(item => Math.round((item.avg_success_rate_prod + item.avg_success_rate_rec) / 2) >= filterSuccessMin);
+    }
+    if (filterSuccessMax !== "") {
+      data = data.filter(item => Math.round((item.avg_success_rate_prod + item.avg_success_rate_rec) / 2) <= filterSuccessMax);
+    }
+    if (filterFreqMin !== "") {
+      data = data.filter(item => item.words_dim?.frequency_rank >= filterFreqMin);
+    }
+    if (filterFreqMax !== "") {
+      data = data.filter(item => item.words_dim?.frequency_rank <= filterFreqMax);
+    }
+    if (filterReviewMin !== "") {
+      data = data.filter(item => (item.review_count || 0) >= filterReviewMin);
+    }
+    if (filterReviewMax !== "") {
+      data = data.filter(item => (item.review_count || 0) <= filterReviewMax);
+    }
+
+    // Sort
+    return [...data].sort((a, b) => {
+      if (sortField === "smart") {
+        // 1. Heat (desc)
+        const aHeat = a.interest_score || 0;
+        const bHeat = b.interest_score || 0;
+        if (aHeat !== bHeat) return sortDirection === "asc" ? bHeat - aHeat : aHeat - bHeat;
+        
+        // 2. Success (asc)
+        const aSuccess = (a.avg_success_rate_prod + a.avg_success_rate_rec) / 2;
+        const bSuccess = (b.avg_success_rate_prod + b.avg_success_rate_rec) / 2;
+        if (aSuccess !== bSuccess) return sortDirection === "asc" ? aSuccess - bSuccess : bSuccess - aSuccess;
+        
+        // 3. Frequency (asc)
+        const aFreq = a.words_dim?.frequency_rank > 0 ? a.words_dim.frequency_rank : 99999;
+        const bFreq = b.words_dim?.frequency_rank > 0 ? b.words_dim.frequency_rank : 99999;
+        return sortDirection === "asc" ? aFreq - bFreq : bFreq - aFreq;
+      }
+
+      let aVal: any = "";
+      let bVal: any = "";
+      
+      switch (sortField) {
+        case "greek_text":
+          aVal = a.words_dim?.greek_text || "";
+          bVal = b.words_dim?.greek_text || "";
+          break;
+        case "french_text":
+          aVal = a.words_dim?.french_text || "";
+          bVal = b.words_dim?.french_text || "";
+          break;
+        case "theme":
+          aVal = a.words_dim?.theme || "";
+          bVal = b.words_dim?.theme || "";
+          break;
+        case "success":
+          aVal = (a.avg_success_rate_prod + a.avg_success_rate_rec) / 2;
+          bVal = (b.avg_success_rate_prod + b.avg_success_rate_rec) / 2;
+          break;
+        case "frequency":
+          aVal = a.words_dim?.frequency_rank > 0 ? a.words_dim.frequency_rank : 99999;
+          bVal = b.words_dim?.frequency_rank > 0 ? b.words_dim.frequency_rank : 99999;
+          break;
+        case "review_count":
+          aVal = a.review_count || 0;
+          bVal = b.review_count || 0;
+          break;
+        case "heat":
+          aVal = a.interest_score || 0;
+          bVal = b.interest_score || 0;
+          break;
+      }
+
+      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [myLibrary, sortField, sortDirection, filterTheme, filterSuccessMin, filterSuccessMax, filterFreqMin, filterFreqMax, filterReviewMin, filterReviewMax, filterStatus, searchQuery, filterPOS]);
+
+  const displayedRemoved = useMemo(() => {
+    let data = myLibrary.filter(w => w.is_archived);
+
+    // Filters
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      data = data.filter(item => 
+        (item.words_dim?.greek_text || "").toLowerCase().includes(q) ||
+        (item.words_dim?.french_text || "").toLowerCase().includes(q)
+      );
+    }
+
+    if (filterTheme) {
+      data = data.filter(item => item.words_dim?.theme === filterTheme);
+    }
+    if (filterPOS) {
+      data = data.filter(item => item.words_dim?.part_of_speech === filterPOS);
+    }
+    if (filterStatus === "fav") {
+      data = data.filter(item => item.is_fav);
+    }
+
+    if (filterSuccessMin !== "") {
+      data = data.filter(item => Math.round((item.avg_success_rate_prod + item.avg_success_rate_rec) / 2) >= filterSuccessMin);
+    }
+    if (filterSuccessMax !== "") {
+      data = data.filter(item => Math.round((item.avg_success_rate_prod + item.avg_success_rate_rec) / 2) <= filterSuccessMax);
+    }
+    if (filterFreqMin !== "") {
+      data = data.filter(item => item.words_dim?.frequency_rank >= filterFreqMin);
+    }
+    if (filterFreqMax !== "") {
+      data = data.filter(item => item.words_dim?.frequency_rank <= filterFreqMax);
+    }
+    if (filterReviewMin !== "") {
+      data = data.filter(item => (item.review_count || 0) >= filterReviewMin);
+    }
+    if (filterReviewMax !== "") {
+      data = data.filter(item => (item.review_count || 0) <= filterReviewMax);
+    }
+
+    // Sort
+    return [...data].sort((a, b) => {
+      if (sortField === "smart") {
+        // 1. Heat (desc)
+        const aHeat = a.interest_score || 0;
+        const bHeat = b.interest_score || 0;
+        if (aHeat !== bHeat) return sortDirection === "asc" ? bHeat - aHeat : aHeat - bHeat;
+        
+        // 2. Success (asc)
+        const aSuccess = (a.avg_success_rate_prod + a.avg_success_rate_rec) / 2;
+        const bSuccess = (b.avg_success_rate_prod + b.avg_success_rate_rec) / 2;
+        if (aSuccess !== bSuccess) return sortDirection === "asc" ? aSuccess - bSuccess : bSuccess - aSuccess;
+        
+        // 3. Frequency (asc)
+        const aFreq = a.words_dim?.frequency_rank > 0 ? a.words_dim.frequency_rank : 99999;
+        const bFreq = b.words_dim?.frequency_rank > 0 ? b.words_dim.frequency_rank : 99999;
+        return sortDirection === "asc" ? aFreq - bFreq : bFreq - aFreq;
+      }
+
+      let aVal: any = "";
+      let bVal: any = "";
+      
+      switch (sortField) {
+        case "greek_text":
+          aVal = a.words_dim?.greek_text || "";
+          bVal = b.words_dim?.greek_text || "";
+          break;
+        case "french_text":
+          aVal = a.words_dim?.french_text || "";
+          bVal = b.words_dim?.french_text || "";
+          break;
+        case "theme":
+          aVal = a.words_dim?.theme || "";
+          bVal = b.words_dim?.theme || "";
+          break;
+        case "success":
+          aVal = (a.avg_success_rate_prod + a.avg_success_rate_rec) / 2;
+          bVal = (b.avg_success_rate_prod + b.avg_success_rate_rec) / 2;
+          break;
+        case "frequency":
+          aVal = a.words_dim?.frequency_rank > 0 ? a.words_dim.frequency_rank : 99999;
+          bVal = b.words_dim?.frequency_rank > 0 ? b.words_dim.frequency_rank : 99999;
+          break;
+        case "review_count":
+          aVal = a.review_count || 0;
+          bVal = b.review_count || 0;
+          break;
+        case "heat":
+          aVal = a.interest_score || 0;
+          bVal = b.interest_score || 0;
+          break;
+      }
+
+      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [myLibrary, sortField, sortDirection, filterTheme, filterSuccessMin, filterSuccessMax, filterFreqMin, filterFreqMax, filterReviewMin, filterReviewMax, filterStatus, searchQuery, filterPOS]);
+
+  const displayedOthers = useMemo(() => {
+    let data = othersLibrary;
+
+    // Filters for 'others' are limited as they don't have personal stats
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      data = data.filter(item => 
+        (item.greek_text || "").toLowerCase().includes(q) ||
+        (item.french_text || "").toLowerCase().includes(q)
+      );
+    }
+
+    if (filterTheme) {
+      data = data.filter(item => item.theme === filterTheme);
+    }
+    if (filterPOS) {
+      data = data.filter(item => item.part_of_speech === filterPOS);
+    }
+    if (filterFreqMin !== "") {
+      data = data.filter(item => item.frequency_rank >= filterFreqMin);
+    }
+    if (filterFreqMax !== "") {
+      data = data.filter(item => item.frequency_rank <= filterFreqMax);
+    }
+
+    return [...data].sort((a, b) => {
+      let aVal: any = "";
+      let bVal: any = "";
+      
+      switch (sortField) {
+        case "greek_text":
+          aVal = a.greek_text || "";
+          bVal = b.greek_text || "";
+          break;
+        case "french_text":
+          aVal = a.french_text || "";
+          bVal = b.french_text || "";
+          break;
+        case "theme":
+          aVal = a.theme || "";
+          bVal = b.theme || "";
+          break;
+        case "frequency":
+          aVal = a.frequency_rank > 0 ? a.frequency_rank : 99999;
+          bVal = b.frequency_rank > 0 ? b.frequency_rank : 99999;
+          break;
+        default:
+          return 0;
+      }
+
+      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [othersLibrary, sortField, sortDirection, filterTheme, filterFreqMin, filterFreqMax, searchQuery, filterPOS]);
+
+  const toggleSelection = (id: string) => {
+    const newSet = new Set(selectedWordIds);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setSelectedWordIds(newSet);
+  };
+
+  const toggleAllSelection = () => {
+    if (activeTab === "my_library") {
+      if (selectedWordIds.size === displayedLibrary.length) setSelectedWordIds(new Set());
+      else setSelectedWordIds(new Set(displayedLibrary.map(w => w.word_id)));
+    } else if (activeTab === "removed") {
+      if (selectedWordIds.size === displayedRemoved.length) setSelectedWordIds(new Set());
+      else setSelectedWordIds(new Set(displayedRemoved.map(w => w.word_id)));
+    } else {
+      if (selectedWordIds.size === displayedOthers.length) setSelectedWordIds(new Set());
+      else setSelectedWordIds(new Set(displayedOthers.map(w => w.id)));
+    }
+  };
+
+  const uniqueThemes = useMemo(() => {
+    const themes = new Set<string>();
+    myLibrary.forEach(item => {
+      if (item.words_dim?.theme) themes.add(item.words_dim.theme);
+    });
+    othersLibrary.forEach(item => {
+      if (item.theme) themes.add(item.theme);
+    });
+    return Array.from(themes).sort();
+  }, [myLibrary, othersLibrary]);
+
+  const uniquePOS = useMemo(() => {
+    const pos = new Set<string>();
+    myLibrary.forEach(item => {
+      if (item.words_dim?.part_of_speech) pos.add(item.words_dim.part_of_speech);
+    });
+    othersLibrary.forEach(item => {
+      if (item.part_of_speech) pos.add(item.part_of_speech);
+    });
+    return Array.from(pos).sort();
+  }, [myLibrary, othersLibrary]);
+
+  const handleCreatePackFromSelection = () => {
+    if (selectedWordIds.size === 0) return;
+    // We can store these IDs in localStorage or context to pass to the Packs page, or use query params.
+    // For simplicity, let's alert and log, since actual "Create Pack" usually needs a modal or redirect.
+    toast.success(`Ready to create pack with ${selectedWordIds.size} words! (Implementation pending)`);
+  };
+
+  if (isAuthChecking) {
+    return (
+      <main className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </main>
+    );
+  }
+
+  return (
+    <main className="h-screen overflow-hidden bg-gray-50 p-6 pb-0 flex flex-col items-center">
+      <ConflictResolutionModal {...conflictState} />
+      <EditWordModal 
+        isOpen={!!editingWord}
+        onClose={() => setEditingWord(null)}
+        word={editingWord}
+        onSuccess={() => {
+          setEditingWord(null);
+          fetchVocab();
+        }}
+      />
+      <BatchEditModal
+        isOpen={isBatchEditing}
+        onClose={() => setIsBatchEditing(false)}
+        selectedWordIds={Array.from(selectedWordIds)}
+        onSuccess={() => {
+          setIsBatchEditing(false);
+          setSelectedWordIds(new Set());
+          fetchVocab();
+        }}
+      />
+      {importSummary && (
+        <ImportSummaryModal 
+          isOpen={importSummary.isOpen}
+          onClose={() => setImportSummary(null)}
+          total={importSummary.total}
+          byTheme={importSummary.byTheme}
+          byDifficulty={importSummary.byDifficulty}
+        />
+      )}
+      <PracticeSelectionModal 
+        isOpen={showPracticeModal} 
+        onClose={() => setShowPracticeModal(false)} 
+        userId={userId || ""} 
+      />
+      <div className="w-full max-w-6xl flex flex-col h-full">
+        <div className="shrink-0 flex flex-col">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
+              Advanced Word Vault
+            </h1>
+            <p className="mt-2 text-gray-500 text-sm">
+              Manage your Greek vocabulary, view stats, and import words.
+            </p>
+          </div>
+          <div className="flex gap-4">
+            <button
+              onClick={() => setShowPracticeModal(true)}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg font-semibold shadow hover:bg-green-700 transition"
+            >
+              Practice Now
+            </button>
+            <button
+              onClick={() => router.push("/")}
+              className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition"
+            >
+              Dashboard
+            </button>
+          </div>
+        </div>
+
+        {/* Uploader Section */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 overflow-hidden">
+          <button 
+            onClick={() => setShowUploader(!showUploader)}
+            className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition"
+          >
+            <div className="flex items-center gap-2 text-gray-700 font-semibold">
+              <UploadCloud className="w-5 h-5" />
+              Import CSV
+            </div>
+            {showUploader ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
+          </button>
+          {showUploader && (
+             <div className="p-6 border-t border-gray-200">
+               <div className="mb-4 text-sm text-gray-600 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                 <p className="font-semibold text-blue-800 mb-1">Expected CSV Format:</p>
+                 <p>Your CSV should include the following header columns:</p>
+                 <ul className="list-disc list-inside ml-4 mt-1 space-y-0.5">
+                   <li><strong>Greek Word</strong> (required)</li>
+                   <li><strong>French Translation</strong></li>
+                   <li><strong>Part of Speech</strong></li>
+                   <li><strong>Group</strong> (this will become the Theme)</li>
+                 </ul>
+               </div>
+               <div
+                 onDrop={handleDrop}
+                 onDragOver={handleDragOver}
+                 onDragLeave={handleDragLeave}
+                 onClick={() => !isUploading && fileInputRef.current?.click()}
+                 className={`
+                   relative flex flex-col items-center justify-center gap-4
+                   rounded-2xl border-2 border-dashed p-12 text-center
+                   transition-all duration-200 cursor-pointer
+                   ${
+                     isDragging
+                       ? "border-blue-500 bg-blue-50"
+                       : "border-gray-300 bg-white hover:border-blue-400 hover:bg-gray-50"
+                   }
+                   ${isUploading ? "pointer-events-none opacity-60" : ""}
+                 `}
+               >
+                 <div className="flex items-center justify-center w-14 h-14 rounded-full bg-blue-100">
+                   <UploadCloud className="w-7 h-7 text-blue-600" />
+                 </div>
+                 {isUploading || isAdding ? (
+                   <div className="flex flex-col items-center gap-2">
+                     <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                     <p className="text-sm text-gray-500">Processing...</p>
+                   </div>
+                 ) : (
+                   <>
+                     <div>
+                       <p className="font-semibold text-gray-700">
+                         {fileName ?? "Drop your CSV here"}
+                       </p>
+                       <p className="text-sm text-gray-400 mt-1">
+                         or click to browse
+                       </p>
+                     </div>
+                     <span className="text-xs text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
+                       .csv files only
+                     </span>
+                   </>
+                 )}
+                 <input
+                   ref={fileInputRef}
+                   type="file"
+                   accept=".csv"
+                   className="hidden"
+                   onChange={handleFileChange}
+                   disabled={isUploading || isAdding}
+                 />
+               </div>
+             </div>
+          )}
+        </div>
+
+        {/* Filter Bar */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 mb-6">
+          <div className="flex flex-wrap gap-4 items-end">
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Theme</label>
+              <select 
+                value={filterTheme}
+                onChange={(e) => setFilterTheme(e.target.value)}
+                className="border border-gray-300 rounded p-1.5 text-sm"
+              >
+                <option value="">All Themes</option>
+                {uniqueThemes.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">POS</label>
+              <select 
+                value={filterPOS}
+                onChange={(e) => setFilterPOS(e.target.value)}
+                className="border border-gray-300 rounded p-1.5 text-sm"
+              >
+                <option value="">All Parts of Speech</option>
+                {uniquePOS.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            
+            {activeTab === "my_library" && (
+              <>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Success Rate (%)</label>
+                  <div className="flex items-center gap-1">
+                    <input 
+                      type="number" placeholder="Min" 
+                      value={filterSuccessMin} onChange={(e) => setFilterSuccessMin(e.target.value ? Number(e.target.value) : "")}
+                      className="border border-gray-300 rounded p-1.5 text-sm w-16" 
+                    />
+                    <span className="text-gray-400">-</span>
+                    <input 
+                      type="number" placeholder="Max" 
+                      value={filterSuccessMax} onChange={(e) => setFilterSuccessMax(e.target.value ? Number(e.target.value) : "")}
+                      className="border border-gray-300 rounded p-1.5 text-sm w-16" 
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Review Count</label>
+                  <div className="flex items-center gap-1">
+                    <input 
+                      type="number" placeholder="Min" 
+                      value={filterReviewMin} onChange={(e) => setFilterReviewMin(e.target.value ? Number(e.target.value) : "")}
+                      className="border border-gray-300 rounded p-1.5 text-sm w-16" 
+                    />
+                    <span className="text-gray-400">-</span>
+                    <input 
+                      type="number" placeholder="Max" 
+                      value={filterReviewMax} onChange={(e) => setFilterReviewMax(e.target.value ? Number(e.target.value) : "")}
+                      className="border border-gray-300 rounded p-1.5 text-sm w-16" 
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pb-1.5">
+                  <input 
+                    type="checkbox" 
+                    id="fav" 
+                    checked={filterStatus === "fav"} 
+                    onChange={(e) => setFilterStatus(e.target.checked ? "fav" : "all")} 
+                    className="rounded text-blue-600 border-gray-300 focus:ring-blue-500" 
+                  />
+                  <label htmlFor="fav" className="text-sm font-medium text-gray-700">Favorites Only</label>
+                </div>
+              </>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Frequency Rank</label>
+              <div className="flex items-center gap-1">
+                <input 
+                  type="number" placeholder="Min" 
+                  value={filterFreqMin} onChange={(e) => setFilterFreqMin(e.target.value ? Number(e.target.value) : "")}
+                  className="border border-gray-300 rounded p-1.5 text-sm w-16" 
+                />
+                <span className="text-gray-400">-</span>
+                <input 
+                  type="number" placeholder="Max" 
+                  value={filterFreqMax} onChange={(e) => setFilterFreqMax(e.target.value ? Number(e.target.value) : "")}
+                  className="border border-gray-300 rounded p-1.5 text-sm w-16" 
+                />
+              </div>
+            </div>
+
+            <button 
+              onClick={() => {
+                setFilterTheme(""); setFilterSuccessMin(""); setFilterSuccessMax("");
+                setFilterFreqMin(""); setFilterFreqMax(""); setFilterReviewMin(""); setFilterReviewMax("");
+                setFilterStatus("all"); setSearchQuery(""); setFilterPOS("");
+                setSortField("smart"); setSortDirection("asc");
+              }}
+              className="text-sm text-blue-600 hover:text-blue-800 underline pb-2"
+            >
+              Clear Filters & Sort
+            </button>
+          </div>
+        </div>
+
+        {/* Tabs & Batch Actions */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-4">
+            <div className="flex bg-white rounded-lg p-1 border border-gray-200 shadow-sm">
+              <button
+                onClick={() => { setActiveTab("my_library"); setSelectedWordIds(new Set()); }}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition ${
+                  activeTab === "my_library" ? "bg-gray-100 text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                My Library ({displayedLibrary.length})
+              </button>
+              <button
+                onClick={() => { setActiveTab("added_by_others"); setSelectedWordIds(new Set()); }}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition ${
+                  activeTab === "added_by_others" ? "bg-gray-100 text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                Added by Others ({displayedOthers.length})
+              </button>
+              <button
+                onClick={() => { setActiveTab("removed"); setSelectedWordIds(new Set()); }}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition ${
+                  activeTab === "removed" ? "bg-gray-100 text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                Removed ({displayedRemoved.length})
+              </button>
+            </div>
+            
+            <div className="relative">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search words..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-64 shadow-sm"
+              />
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {selectedWordIds.size > 0 && (activeTab === "my_library" || activeTab === "removed") && (
+              <>
+                <button 
+                  onClick={() => setIsBatchEditing(true)}
+                  className="px-3 py-1.5 bg-gray-200 text-gray-800 rounded-md text-sm font-medium hover:bg-gray-300 transition shadow"
+                >
+                  Batch Edit ({selectedWordIds.size})
+                </button>
+                <button 
+                  onClick={handleCreatePackFromSelection}
+                  className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition shadow"
+                >
+                  Create Word Pack ({selectedWordIds.size})
+                </button>
+              </>
+            )}
+            {selectedWordIds.size > 0 && activeTab === "added_by_others" && (
+              <>
+                <button 
+                  onClick={() => setIsBatchEditing(true)}
+                  className="px-3 py-1.5 bg-gray-200 text-gray-800 rounded-md text-sm font-medium hover:bg-gray-300 transition shadow"
+                >
+                  Batch Edit ({selectedWordIds.size})
+                </button>
+                <button 
+                  onClick={addSelectedToMyLibrary}
+                  className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition"
+                >
+                  Add {selectedWordIds.size} to My Library
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+        </div>
+
+        {/* Vocabulary List Section */}
+        <div className="bg-white rounded-t-2xl border border-gray-200 border-b-0 shadow-sm flex-1 flex flex-col overflow-hidden">
+          <div className="overflow-x-auto overflow-y-auto flex-1 relative" onScroll={handleScroll}>
+            {isLoadingVocab ? (
+              <div className="p-12 flex justify-center">
+                <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (activeTab === "my_library" ? displayedLibrary.length : activeTab === "removed" ? displayedRemoved.length : displayedOthers.length) === 0 ? (
+              <div className="p-12 text-center text-gray-500">
+                No vocabulary found matching these filters.
+              </div>
+            ) : (
+              <table className="w-full text-left text-sm text-gray-700 relative">
+                <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-medium sticky top-0 z-10 shadow-sm">
+                  <tr>
+                    <th className="px-4 py-3 w-12 text-center">
+                      <input 
+                        type="checkbox" 
+                        onChange={toggleAllSelection} 
+                        checked={
+                          (activeTab === "my_library" && displayedLibrary.length > 0 && selectedWordIds.size === displayedLibrary.length) ||
+                          (activeTab === "removed" && displayedRemoved.length > 0 && selectedWordIds.size === displayedRemoved.length) ||
+                          (activeTab === "added_by_others" && displayedOthers.length > 0 && selectedWordIds.size === displayedOthers.length)
+                        }
+                        className="rounded text-blue-600 focus:ring-blue-500 border-gray-300" 
+                      />
+                    </th>
+                    <th className="px-4 py-3 cursor-pointer hover:bg-gray-100" onClick={() => handleSort("greek_text")}>
+                      Greek Word <SortIcon field="greek_text" />
+                    </th>
+                    <th className="px-4 py-3 cursor-pointer hover:bg-gray-100" onClick={() => handleSort("french_text")}>
+                      Translation <SortIcon field="french_text" />
+                    </th>
+                    <th className="px-4 py-3 cursor-pointer hover:bg-gray-100" onClick={() => handleSort("theme")}>
+                      Theme <SortIcon field="theme" />
+                    </th>
+                    <th className="px-4 py-3 text-center cursor-pointer hover:bg-gray-100" onClick={() => handleSort("success")}>
+                      Success % <SortIcon field="success" />
+                    </th>
+                    <th className="px-4 py-3 text-center cursor-pointer hover:bg-gray-100" onClick={() => handleSort("heat")}>
+                      Heat <SortIcon field="heat" />
+                    </th>
+                    <th className="px-4 py-3 text-center cursor-pointer hover:bg-gray-100" onClick={() => handleSort("review_count")}>
+                      Reviews <SortIcon field="review_count" />
+                    </th>
+                    <th className="px-4 py-3 text-center cursor-pointer hover:bg-gray-100" onClick={() => handleSort("frequency")}>
+                      Freq Rank <SortIcon field="frequency" />
+                    </th>
+                    <th className="px-4 py-3 text-center">Actions</th>
+                  </tr>
+                </thead>
+              <tbody className="divide-y divide-gray-100">
+                {(activeTab === "my_library" || activeTab === "removed") && (activeTab === "my_library" ? displayedLibrary : displayedRemoved).slice(0, visibleCount).map((setting) => {
+                  const vocab = setting.words_dim;
+                    const isArchived = setting.is_archived;
+                    const isFavorite = setting.is_fav;
+                    const isSelected = selectedWordIds.has(setting.word_id);
+                    
+                    return (
+                      <tr 
+                        key={setting.word_id} 
+                        className={`hover:bg-gray-50 transition ${isArchived ? "opacity-50 bg-gray-50" : ""} ${isSelected ? "bg-blue-50/50" : ""}`}
+                      >
+                        <td className="px-4 py-3 text-center">
+                          <input 
+                            type="checkbox" 
+                            checked={isSelected}
+                            onChange={() => toggleSelection(setting.word_id)}
+                            className="rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                          />
+                        </td>
+                        <td className="px-4 py-3 font-medium text-gray-900">{vocab?.greek_text}</td>
+                        <td className="px-4 py-3">{vocab?.french_text}</td>
+                        <td className="px-4 py-3">
+                          <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">
+                            {vocab?.theme || "—"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center font-medium text-green-600">
+                          {Math.round((setting.avg_success_rate_prod + setting.avg_success_rate_rec) / 2)}%
+                        </td>
+                        <td className="px-4 py-3 text-center font-mono text-xs text-orange-500">
+                          {setting.interest_score > 0 ? `+${setting.interest_score}` : setting.interest_score}
+                        </td>
+                        <td className="px-4 py-3 text-center font-mono text-xs text-gray-500">
+                          {setting.review_count || 0}
+                        </td>
+                        <td className="px-4 py-3 text-center text-xs text-gray-400 flex flex-col items-center gap-1">
+                          <span>{vocab?.frequency_rank > 0 ? vocab.frequency_rank : "—"}</span>
+                          <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${
+                            (() => {
+                              const rank = vocab?.frequency_rank > 0 ? vocab.frequency_rank : 99999;
+                              const diff = getDifficultyFromRank(rank);
+                              if (diff === 'easy') return 'bg-green-100 text-green-700';
+                              if (diff === 'medium') return 'bg-yellow-100 text-yellow-700';
+                              if (diff === 'hard') return 'bg-orange-100 text-orange-700';
+                              return 'bg-red-100 text-red-700';
+                            })()
+                          }`}>
+                            {getDifficultyFromRank(vocab?.frequency_rank > 0 ? vocab.frequency_rank : 99999)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                           <div className="flex justify-center items-center gap-1">
+                            <button
+                              onClick={() => toggleFav(setting.word_id, isFavorite)}
+                              disabled={isArchived}
+                              className={`p-1.5 rounded-full transition-colors ${
+                                isArchived 
+                                  ? "cursor-not-allowed text-gray-300" 
+                                  : isFavorite 
+                                    ? "text-yellow-500 hover:bg-yellow-50" 
+                                    : "text-gray-300 hover:text-yellow-500 hover:bg-gray-100"
+                              }`}
+                              title={isFavorite ? "Remove favorite" : "Mark as favorite"}
+                            >
+                              <Star className="w-4 h-4" fill={isFavorite ? "currentColor" : "none"} />
+                            </button>
+                            <button
+                              onClick={() => setEditingWord(vocab)}
+                              className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                              title="Edit word"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => archiveWord(setting.word_id, isArchived)}
+                              className={`p-1.5 rounded-full transition-colors ${
+                                isArchived 
+                                  ? "text-blue-500 hover:text-blue-600 hover:bg-blue-50" 
+                                  : "text-gray-400 hover:text-red-600 hover:bg-red-50"
+                              }`}
+                              title={isArchived ? "Restore to Library" : "Remove from Library"}
+                            >
+                              {isArchived ? <UploadCloud className="w-4 h-4" /> : <Trash2 className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                {activeTab === "added_by_others" && displayedOthers.slice(0, visibleCount).map((vocab) => {
+                  const isSelected = selectedWordIds.has(vocab.id);
+                    return (
+                      <tr 
+                        key={vocab.id} 
+                        className={`hover:bg-gray-50 transition ${isSelected ? "bg-blue-50/50" : ""}`}
+                      >
+                        <td className="px-4 py-3 text-center">
+                          <input 
+                            type="checkbox" 
+                            checked={isSelected}
+                            onChange={() => toggleSelection(vocab.id)}
+                            className="rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                          />
+                        </td>
+                        <td className="px-4 py-3 font-medium text-gray-900">{vocab.greek_text}</td>
+                        <td className="px-4 py-3">{vocab.french_text}</td>
+                        <td className="px-4 py-3">
+                          <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">
+                            {vocab.theme || "—"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center text-gray-300">—</td>
+                        <td className="px-4 py-3 text-center text-gray-300">—</td>
+                        <td className="px-4 py-3 text-center text-gray-300">—</td>
+                        <td className="px-4 py-3 text-center text-xs text-gray-400 flex flex-col items-center gap-1">
+                          <span>{vocab.frequency_rank > 0 ? vocab.frequency_rank : "—"}</span>
+                          <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${
+                            (() => {
+                              const rank = vocab.frequency_rank > 0 ? vocab.frequency_rank : 99999;
+                              const diff = getDifficultyFromRank(rank);
+                              if (diff === 'easy') return 'bg-green-100 text-green-700';
+                              if (diff === 'medium') return 'bg-yellow-100 text-yellow-700';
+                              if (diff === 'hard') return 'bg-orange-100 text-orange-700';
+                              return 'bg-red-100 text-red-700';
+                            })()
+                          }`}>
+                            {getDifficultyFromRank(vocab.frequency_rank > 0 ? vocab.frequency_rank : 99999)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <button
+                            onClick={() => addToMyLibrary(vocab)}
+                            className="p-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition"
+                            title="Add to My Library"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
