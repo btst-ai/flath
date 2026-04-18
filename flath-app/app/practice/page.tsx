@@ -7,31 +7,12 @@ import { motion } from "framer-motion";
 import { Check, X, HelpCircle, ArrowLeft, StopCircle, Star, Archive, Edit2 } from "lucide-react";
 import { submitSessionAttempts } from "@/app/actions/session";
 import { EditWordModal, getDifficultyFromRank } from "@/components/EditWordModal";
-
-interface VocabRecord {
-  id: string;
-  greek_text: string;
-  french_text: string;
-  part_of_speech: string;
-  theme: string;
-  frequency_rank: number;
-}
-
-interface UserSetting {
-  word_id: string;
-  is_fav: boolean;
-  is_archived: boolean;
-  interest_score: number;
-  avg_success_rate_prod: number;
-  avg_success_rate_rec: number;
-  words_dim: VocabRecord;
-}
-
-type Track = "rec" | "prod";
-
-interface SessionWord extends UserSetting {
-  track: Track;
-}
+import {
+  fetchUserWords,
+  sortSoloPriority,
+  assignTracks,
+  type SessionWord,
+} from "@/lib/sessionQueue";
 
 function PracticeSession() {
   const router = useRouter();
@@ -77,91 +58,20 @@ function PracticeSession() {
   const fetchSessionData = useCallback(async () => {
     if (!userId) return;
     setIsLoading(true);
-    
-    let query = supabase
-      .from("user_word_settings")
-      .select(`
-        *,
-        words_dim!inner (*)
-      `)
-      .eq("user_id", userId)
-      .eq("is_archived", false);
 
-    // Filter by Pack if a packId is provided
-    if (packId) {
-      if (packId.startsWith("auto-theme-")) {
-        const themeToMatch = decodeURIComponent(packId.replace("auto-theme-", ""));
-        query = query.eq("words_dim.theme", themeToMatch);
-      } else {
-        // Handle static packs or custom smart packs
-        const { data: packData } = await supabase.from("word_packs").select("*").eq("id", packId).single();
-        if (packData) {
-          if (packData.is_smart) {
-            const { filter_criteria } = packData;
-            if (filter_criteria.theme) query = query.eq("words_dim.theme", filter_criteria.theme);
-            if (filter_criteria.pos) query = query.eq("words_dim.part_of_speech", filter_criteria.pos);
-            if (filter_criteria.favOnly) query = query.eq("is_fav", true);
-          } else {
-            // Static pack: get word IDs from word_pack_items
-            const { data: items } = await supabase.from("word_pack_items").select("word_id").eq("pack_id", packId);
-            if (items && items.length > 0) {
-              const ids = items.map(i => i.word_id);
-              query = query.in("word_id", ids);
-            } else {
-              // Empty pack
-              query = query.eq("word_id", "00000000-0000-0000-0000-000000000000"); 
-            }
-          }
-        }
-      }
-    }
+    const words = await fetchUserWords(userId, packId);
 
-    const { data, error } = await query;
+    // Sort order: interest desc → success asc → frequency asc.
+    const ranked = sortSoloPriority(words);
 
-    if (error || !data) {
-      console.error(error);
-      setIsLoading(false);
-      return;
-    }
-
-    const words = data as UserSetting[];
-    
-    // Sort Order (Word Ranking Method):
-    // 1. Interest Score/Heat (Highest first)
-    // 2. Success Rate (Lowest first)
-    // 3. Frequency Rank (Most frequent first)
-    words.sort((a, b) => {
-      if (a.interest_score !== b.interest_score) return b.interest_score - a.interest_score;
-      const successA = (a.avg_success_rate_prod + a.avg_success_rate_rec) / 2;
-      const successB = (b.avg_success_rate_prod + b.avg_success_rate_rec) / 2;
-      if (successA !== successB) return successA - successB; // Lowest first
-      
-      // Handle missing frequency_rank (-1)
-      const freqA = a.words_dim.frequency_rank > 0 ? a.words_dim.frequency_rank : 99999;
-      const freqB = b.words_dim.frequency_rank > 0 ? b.words_dim.frequency_rank : 99999;
-      return freqA - freqB; // lowest number = most frequent
-    });
-
-    // Assign tracks and take top 50 for the session
-    const sessionWords: SessionWord[] = words.slice(0, 50).map(word => {
-      // Adaptive Weighting: Target the weaker skill
-      let track: Track;
-      if (word.avg_success_rate_rec > word.avg_success_rate_prod + 20) {
-        track = "prod"; // Recognition is much better, force Production
-      } else if (word.avg_success_rate_prod > word.avg_success_rate_rec + 20) {
-        track = "rec"; // Production is much better, force Recognition
-      } else {
-        // If they are relatively balanced, pick randomly
-        track = Math.random() > 0.5 ? "rec" : "prod";
-      }
-      return { ...word, track };
-    });
+    // Top 50, with adaptive rec/prod assignment.
+    const sessionWords = assignTracks(ranked.slice(0, 50), "mixed");
 
     setQueue(sessionWords);
     setTotalSessionSize(sessionWords.length);
     setMasteredCount(0);
     setIsLoading(false);
-  }, [userId]);
+  }, [userId, packId]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data, error }) => {

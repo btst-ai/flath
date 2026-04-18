@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { BookOpen, Layers, Folder } from "lucide-react";
+import { BookOpen, Layers, Folder, Swords } from "lucide-react";
 import { PracticeSelectionModal } from "@/components/PracticeSelectionModal";
 
 export default function Home() {
@@ -70,6 +70,13 @@ export default function Home() {
             >
               <BookOpen className="w-5 h-5" />
               Start Practice Session
+            </button>
+            <button
+              onClick={() => router.push("/duel")}
+              className="flex items-center justify-center gap-3 w-full px-6 py-4 bg-red-600 text-white rounded-xl font-semibold text-lg hover:bg-red-700 transition shadow"
+            >
+              <Swords className="w-5 h-5" />
+              Duel
             </button>
             <button
               onClick={() => router.push("/packs")}
