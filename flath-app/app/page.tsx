@@ -56,11 +56,15 @@ export default function Home() {
 
       <main className="w-full max-w-2xl bg-white rounded-3xl border border-gray-200 shadow-sm p-12 text-center">
         <div className="mb-8">
-          <h1
-            className="text-5xl font-bold tracking-widest text-gray-900 mb-2"
-            style={{ fontFamily: "var(--font-greek-to-me)" }}
-          >
-            ⚡🇫🇷 FLATH 🇬🇷⚡
+          {/* Mobile: 3 rows */}
+          <h1 className="md:hidden flex flex-col items-center gap-1 font-bold tracking-widest text-gray-900 mb-2">
+            <span style={{ fontFamily: "initial" }} className="text-3xl">⚡🇫🇷⚡</span>
+            <span style={{ fontFamily: "var(--font-greek-to-me)" }} className="text-4xl">FLATH</span>
+            <span style={{ fontFamily: "initial" }} className="text-3xl">⚡🇬🇷⚡</span>
+          </h1>
+          {/* Desktop: single row */}
+          <h1 className="hidden md:block text-5xl font-bold tracking-widest text-gray-900 mb-2" style={{ fontFamily: "var(--font-greek-to-me)" }}>
+            <span style={{ fontFamily: "initial" }}>⚡🇫🇷 </span>FLATH<span style={{ fontFamily: "initial" }}> 🇬🇷⚡</span>
           </h1>
         </div>
 
