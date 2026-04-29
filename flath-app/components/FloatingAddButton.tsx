@@ -28,9 +28,10 @@ export function FloatingAddButton() {
       <button
         onClick={() => setIsOpen(true)}
         title="Add word"
-        className="fixed top-4 left-4 z-50 w-10 h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95"
+        className="fixed left-4 z-50 w-12 h-12 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95"
+        style={{ bottom: "calc(1rem + env(safe-area-inset-bottom))" }}
       >
-        <Plus className="w-5 h-5" />
+        <Plus className="w-6 h-6" />
       </button>
       <AddWordModal isOpen={isOpen} onClose={() => setIsOpen(false)} />
     </>

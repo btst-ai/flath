@@ -321,7 +321,7 @@ function PracticeSession() {
   const diffColor = difficultyColors[difficulty as keyof typeof difficultyColors] || "bg-gray-100 text-gray-700";
 
   return (
-    <main className="min-h-screen bg-gray-50 flex flex-col items-center p-6">
+    <main className="min-h-screen flex flex-col items-center p-4 md:p-6">
       <EditWordModal 
         isOpen={!!editingWord}
         onClose={() => setEditingWord(null)}
@@ -339,7 +339,7 @@ function PracticeSession() {
           setEditingWord(null);
         }}
       />
-      <div className="w-full max-w-2xl flex items-center justify-between mb-8 mt-4">
+      <div className="w-full max-w-2xl flex items-center justify-between gap-2 flex-wrap mb-4 mt-2 md:mb-8 md:mt-4">
         <button
           onClick={() => router.push("/")}
           className="p-2 text-gray-400 hover:text-gray-700 bg-white border border-gray-200 rounded-full shadow-sm transition"
@@ -362,7 +362,7 @@ function PracticeSession() {
         
         <button
           onClick={() => handleEndSession(false)}
-          className="flex items-center gap-1 p-2 px-3 text-red-500 hover:bg-red-50 rounded-full transition font-medium text-sm"
+          className="flex items-center gap-1 px-4 py-2 bg-white border border-gray-200 shadow-sm text-red-500 hover:bg-red-50 rounded-full transition font-medium text-sm"
         >
           <StopCircle className="w-5 h-5" />
           End Session
@@ -370,9 +370,9 @@ function PracticeSession() {
       </div>
 
       {/* Flashcard Area */}
-      <div className="flex-1 w-full max-w-2xl flex flex-col items-center justify-center -mt-12">
-        <div 
-          className="w-full aspect-[4/3] perspective-1000 cursor-pointer"
+      <div className="flex-1 w-full max-w-2xl flex flex-col items-center justify-center md:-mt-12">
+        <div
+          className="w-full flex-1 md:flex-none md:aspect-[4/3] perspective-1000 cursor-pointer min-h-[60vh] md:min-h-0"
           onClick={() => setFlipped(!flipped)}
         >
           <motion.div
@@ -381,93 +381,96 @@ function PracticeSession() {
             transition={{ type: "spring", stiffness: 260, damping: 20 }}
           >
             {/* Front */}
-            <div className="absolute w-full h-full backface-hidden bg-white rounded-3xl shadow-lg border border-gray-100 flex flex-col items-center justify-center p-8 text-center">
-              <div className="absolute top-6 left-6 flex flex-col items-start gap-2">
-                <span className="text-xs font-bold uppercase tracking-widest text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
-                  Theme: {currentWord.words_dim.theme || 'None'}
-                </span>
-                <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${diffColor}`}>
-                  {difficulty}
-                </span>
+            <div className="absolute w-full h-full backface-hidden bg-white rounded-3xl shadow-lg border border-gray-100 flex flex-col p-6 md:p-8 text-center">
+              {/* Top chrome — flow layout: stacks on mobile, splits left/right on desktop */}
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div className="flex flex-col items-start gap-2 order-2 md:order-1">
+                  <span className="text-xs font-bold uppercase tracking-widest text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
+                    Theme: {currentWord.words_dim.theme || 'None'}
+                  </span>
+                  <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${diffColor}`}>
+                    {difficulty}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 order-1 md:order-2 self-end md:self-auto">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(promptText); }}
+                    className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors z-10"
+                    title="Copy word"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); window.open(`https://www.google.com/search?q=${encodeURIComponent(currentWord.words_dim.greek_text + ' meaning')}`, '_blank'); }}
+                    className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors z-10"
+                    title="Search online"
+                  >
+                    <Search className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setEditingWord(currentWord.words_dim); }}
+                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors z-10"
+                    title="Edit Word"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-              <div className="absolute top-6 right-6 flex items-center gap-2">
-                <span className={`text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full ${isRec ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'}`}>
-                  {isRec ? 'Recognition' : 'Production'}
-                </span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(promptText); }}
-                  className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors z-10"
-                  title="Copy word"
-                >
-                  <Copy className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); window.open(`https://www.google.com/search?q=${encodeURIComponent(currentWord.words_dim.greek_text + ' meaning')}`, '_blank'); }}
-                  className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors z-10"
-                  title="Search online"
-                >
-                  <Search className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setEditingWord(currentWord.words_dim); }}
-                  className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors z-10"
-                  title="Edit Word"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
+
+              <div className="flex-1 flex flex-col items-center justify-center">
+                <h2 className={`font-medium text-gray-900 mb-6 ${isRec ? 'text-5xl sm:text-6xl font-serif' : 'text-4xl sm:text-5xl'}`}>
+                  {promptText}
+                </h2>
+                <p className="text-gray-400 font-medium">
+                  {currentWord.words_dim.part_of_speech}
+                </p>
               </div>
-              
-              <h2 className={`font-medium text-gray-900 mb-6 ${isRec ? 'text-5xl sm:text-6xl font-serif' : 'text-4xl sm:text-5xl'}`}>
-                {promptText}
-              </h2>
-              
-              <p className="text-gray-400 font-medium">
-                {currentWord.words_dim.part_of_speech}
-              </p>
-              
-              <div className="absolute bottom-6 text-gray-300 text-sm animate-pulse">
+
+              <div className="text-gray-300 text-sm animate-pulse">
                 Tap to flip
               </div>
             </div>
 
             {/* Back */}
-            <div 
-              className="absolute w-full h-full backface-hidden bg-gray-900 rounded-3xl shadow-xl flex flex-col items-center justify-center p-8 text-center"
+            <div
+              className="absolute w-full h-full backface-hidden bg-gray-900 rounded-3xl shadow-xl flex flex-col p-6 md:p-8 text-center"
               style={{ transform: "rotateY(180deg)" }}
             >
-              <div className="absolute top-6 left-6 flex flex-col items-start gap-2">
-                <span className="text-xs font-bold uppercase tracking-widest text-gray-400 bg-gray-800 px-3 py-1 rounded-full">
-                  Theme: {currentWord.words_dim.theme || 'None'}
-                </span>
-                <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${diffColor}`}>
-                  {difficulty}
-                </span>
-              </div>
-              <div className="absolute top-6 right-6 flex items-center gap-2">
-                <button
-                  onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(translationText); }}
-                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-full transition-colors z-10"
-                  title="Copy word"
-                >
-                  <Copy className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); window.open(`https://www.google.com/search?q=${encodeURIComponent(currentWord.words_dim.greek_text + ' meaning')}`, '_blank'); }}
-                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-full transition-colors z-10"
-                  title="Search online"
-                >
-                  <Search className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setEditingWord(currentWord.words_dim); }}
-                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-full transition-colors z-10"
-                  title="Edit Word"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div className="flex flex-col items-start gap-2 order-2 md:order-1">
+                  <span className="text-xs font-bold uppercase tracking-widest text-gray-400 bg-gray-800 px-3 py-1 rounded-full">
+                    Theme: {currentWord.words_dim.theme || 'None'}
+                  </span>
+                  <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${diffColor}`}>
+                    {difficulty}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 order-1 md:order-2 self-end md:self-auto">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(translationText); }}
+                    className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-full transition-colors z-10"
+                    title="Copy word"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); window.open(`https://www.google.com/search?q=${encodeURIComponent(currentWord.words_dim.greek_text + ' meaning')}`, '_blank'); }}
+                    className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-full transition-colors z-10"
+                    title="Search online"
+                  >
+                    <Search className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setEditingWord(currentWord.words_dim); }}
+                    className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-full transition-colors z-10"
+                    title="Edit Word"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
-              <div className="flex-1 flex flex-col items-center justify-center w-full">
+              <div className="flex-1 flex flex-col items-center justify-center w-full pb-20">
                 <p className="text-gray-400 text-lg mb-4">
                   {promptText}
                 </p>

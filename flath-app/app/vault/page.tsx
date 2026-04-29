@@ -85,6 +85,21 @@ export default function VaultPage() {
       setVisibleCount(prev => prev + 50);
     }
   };
+
+  // Mobile uses document scroll (the inner table scroll is gated to md:); attach
+  // a window listener so infinite-scroll still triggers near the bottom.
+  useEffect(() => {
+    const onWindowScroll = () => {
+      if (window.innerWidth >= 768) return;
+      const { scrollY, innerHeight } = window;
+      const docHeight = document.documentElement.scrollHeight;
+      if (docHeight - (scrollY + innerHeight) <= 200) {
+        setVisibleCount(prev => prev + 50);
+      }
+    };
+    window.addEventListener("scroll", onWindowScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onWindowScroll);
+  }, []);
   
   const [importSummary, setImportSummary] = useState<{
     isOpen: boolean;
@@ -673,7 +688,7 @@ export default function VaultPage() {
   }
 
   return (
-    <main className="h-screen overflow-hidden bg-gray-50 p-6 pb-0 flex flex-col items-center">
+    <main className="min-h-screen md:h-screen md:overflow-hidden p-4 md:p-6 md:pb-0 flex flex-col items-center">
       <ConflictResolutionModal {...conflictState} />
       <EditWordModal 
         isOpen={!!editingWord}
@@ -1118,8 +1133,8 @@ export default function VaultPage() {
         </div>
 
         {/* Vocabulary List Section */}
-        <div className="bg-white rounded-t-2xl border border-gray-200 border-b-0 shadow-sm flex-1 flex flex-col overflow-hidden">
-          <div className="overflow-x-auto overflow-y-auto flex-1 relative" onScroll={handleScroll}>
+        <div className="bg-white rounded-t-2xl border border-gray-200 border-b-0 shadow-sm flex-1 flex flex-col md:overflow-hidden">
+          <div className="overflow-x-auto md:overflow-y-auto md:flex-1 relative" onScroll={handleScroll}>
             {isLoadingVocab ? (
               <div className="p-12 flex justify-center">
                 <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />

@@ -46,7 +46,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen flex flex-col items-center justify-center p-6">
       {/* Practice Modal */}
       <PracticeSelectionModal 
         isOpen={showPracticeModal} 
@@ -56,15 +56,12 @@ export default function Home() {
 
       <main className="w-full max-w-2xl bg-white rounded-3xl border border-gray-200 shadow-sm p-12 text-center">
         <div className="mb-8">
-          <div className="mx-auto w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-6 shadow-inner">
-            <BookOpen className="w-8 h-8" />
-          </div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 mb-4">
-            Greek Lexical Engine
+          <h1
+            className="text-5xl font-bold tracking-widest text-gray-900 mb-2"
+            style={{ fontFamily: "var(--font-greek-to-me)" }}
+          >
+            ⚡🇫🇷 FLATH 🇬🇷⚡
           </h1>
-          <p className="text-lg text-gray-600 max-w-md mx-auto">
-            A high-precision vocabulary mastery tool for B1 Modern Greek learners, focused on Intent and Two-Track recall.
-          </p>
         </div>
 
         {isAuthenticated ? (
