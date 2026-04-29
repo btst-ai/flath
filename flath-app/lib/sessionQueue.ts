@@ -39,6 +39,7 @@ export type CardMode = "prod" | "rec" | "mixed";
 export async function fetchUserWords(
   userId: string,
   packId?: string | null,
+  wordIds?: string[] | null,
 ): Promise<UserSetting[]> {
   let query = supabase
     .from("user_word_settings")
@@ -49,7 +50,9 @@ export async function fetchUserWords(
     .eq("user_id", userId)
     .eq("is_archived", false);
 
-  if (packId) {
+  if (wordIds && wordIds.length > 0) {
+    query = query.in("word_id", wordIds);
+  } else if (packId) {
     if (packId.startsWith("auto-theme-")) {
       const themeToMatch = decodeURIComponent(packId.replace("auto-theme-", ""));
       query = query.eq("words_dim.theme", themeToMatch);
@@ -80,6 +83,20 @@ export async function fetchUserWords(
   const { data, error } = await query;
   if (error || !data) return [];
   return data as UserSetting[];
+}
+
+// ---------------------------------------------------------------------------
+// Shuffle
+// ---------------------------------------------------------------------------
+
+/** Fisher-Yates in-place shuffle, returns a new array. */
+export function randomShuffle<T>(arr: T[]): T[] {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------

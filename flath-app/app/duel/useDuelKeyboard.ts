@@ -30,9 +30,6 @@ const P2_GRADE: Record<string, Grade> = {
   KeyN: "meh",
   KeyM: "wrong",
 };
-const P1_LOCKIN = "KeyQ";
-const P2_LOCKIN = "KeyP";
-
 /**
  * Any key press recognized for phase transitions that accept "any key".
  * We intentionally use keydown on the window.
@@ -41,7 +38,6 @@ export type PhaseForKeyboard =
   | "idle_claim"
   | "await_reveal"
   | "reveal"
-  | "await_lockin"
   | "scored"
   | "countdown"
   | "idle"; // off-phase (lobby / finished)
@@ -49,9 +45,10 @@ export type PhaseForKeyboard =
 export function useDuelKeyboard(
   phase: PhaseForKeyboard,
   dispatch: Dispatch<DuelAction>,
+  enabled = true,
 ) {
   useEffect(() => {
-    if (phase === "idle") return;
+    if (phase === "idle" || !enabled) return;
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.repeat) return;
@@ -94,20 +91,6 @@ export function useDuelKeyboard(
           return;
         }
 
-        case "await_lockin": {
-          if (code === P1_LOCKIN) {
-            e.preventDefault();
-            dispatch({ type: "LOCKIN", player: "p1" });
-            return;
-          }
-          if (code === P2_LOCKIN) {
-            e.preventDefault();
-            dispatch({ type: "LOCKIN", player: "p2" });
-            return;
-          }
-          return;
-        }
-
         case "scored": {
           e.preventDefault();
           dispatch({ type: "REQUEST_NEXT" });
@@ -122,21 +105,17 @@ export function useDuelKeyboard(
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [phase, dispatch]);
+  }, [phase, dispatch, enabled]);
 }
 
 // Re-exported so the UI can describe the expected keys without duplicating them.
 export const DUEL_KEYS = {
-  p1Claim: { know: "Z", meh: "X", forgot: "C" },
-  p2Claim: { know: "B", meh: "N", forgot: "M" },
-  p1Grade: { right: "Z", meh: "X", wrong: "C" },
-  p2Grade: { right: "B", meh: "N", wrong: "M" },
-  p1Lockin: "Q",
-  p2Lockin: "P",
+  p1: ["Z", "X", "C"],
+  p2: ["B", "N", "M"],
 };
 
 export function _playerFromCode(code: string): PlayerId | null {
-  if (code === "KeyZ" || code === "KeyX" || code === "KeyC" || code === "KeyQ") return "p1";
-  if (code === "KeyB" || code === "KeyN" || code === "KeyM" || code === "KeyP") return "p2";
+  if (code === "KeyZ" || code === "KeyX" || code === "KeyC") return "p1";
+  if (code === "KeyB" || code === "KeyN" || code === "KeyM") return "p2";
   return null;
 }

@@ -4,12 +4,13 @@ import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { motion } from "framer-motion";
-import { Check, X, HelpCircle, ArrowLeft, StopCircle, Star, Archive, Edit2 } from "lucide-react";
+import { Check, X, HelpCircle, ArrowLeft, StopCircle, Star, Archive, Edit2, Copy, Search } from "lucide-react";
 import { submitSessionAttempts } from "@/app/actions/session";
 import { EditWordModal, getDifficultyFromRank } from "@/components/EditWordModal";
 import {
   fetchUserWords,
   sortSoloPriority,
+  randomShuffle,
   assignTracks,
   type SessionWord,
 } from "@/lib/sessionQueue";
@@ -18,6 +19,10 @@ function PracticeSession() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const packId = searchParams.get("pack_id");
+  const wordIdsParam = searchParams.get("word_ids");
+  const wordIds = wordIdsParam ? wordIdsParam.split(",") : null;
+  const mode = searchParams.get("mode");
+  const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "25", 10)));
   
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
@@ -32,6 +37,8 @@ function PracticeSession() {
   const [isFinished, setIsFinished] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
+  const [sessionWords, setSessionWords] = useState<SessionWord[]>([]);
+
   // Card state
   const [flipped, setFlipped] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -41,7 +48,7 @@ function PracticeSession() {
   const handleInterest = async (e: React.MouseEvent, interaction: "fav" | "up" | "none" | "down" | "archive") => {
     e.stopPropagation();
     if (queue.length === 0 || !userId) return;
-    
+
     setCurrentInterestToggle(interaction);
     const currentWord = queue[0];
 
@@ -53,25 +60,42 @@ function PracticeSession() {
       await supabase.from("user_word_settings").update(updatePayload)
         .eq("user_id", userId).eq("word_id", currentWord.word_id);
     }
+
+    if (interaction === "down") {
+      setAttempts(prev => [...prev, {
+        word_id: currentWord.word_id,
+        mode: currentWord.track,
+        outcome: "know",
+        interest_interaction: "down",
+      }]);
+      setFlipped(false);
+      setCurrentInterestToggle("none");
+      setTimeout(() => {
+        setQueue(prev => {
+          const next = prev.slice(1);
+          if (next.length === 0) handleEndSession(true);
+          return next;
+        });
+        setMasteredCount(c => c + 1);
+      }, 150);
+    }
   };
 
   const fetchSessionData = useCallback(async () => {
     if (!userId) return;
     setIsLoading(true);
 
-    const words = await fetchUserWords(userId, packId);
+    const words = await fetchUserWords(userId, packId, wordIds);
 
-    // Sort order: interest desc → success asc → frequency asc.
-    const ranked = sortSoloPriority(words);
-
-    // Top 50, with adaptive rec/prod assignment.
-    const sessionWords = assignTracks(ranked.slice(0, 50), "mixed");
+    const ordered = mode === "random" ? randomShuffle(words) : sortSoloPriority(words);
+    const sessionWords = assignTracks(ordered.slice(0, limit), "mixed");
 
     setQueue(sessionWords);
+    setSessionWords(sessionWords);
     setTotalSessionSize(sessionWords.length);
     setMasteredCount(0);
     setIsLoading(false);
-  }, [userId, packId]);
+  }, [userId, packId, wordIdsParam, mode, limit]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data, error }) => {
@@ -162,51 +186,105 @@ function PracticeSession() {
   }
 
   if (isFinished) {
-    const accuracy = attempts.length > 0 
-      ? Math.round((attempts.filter(a => a.outcome === 'know').length / attempts.length) * 100) 
+    const accuracy = attempts.length > 0
+      ? Math.round((attempts.filter(a => a.outcome === 'know').length / attempts.length) * 100)
       : 0;
 
+    // Build per-word stats from attempts
+    const wordStats: Record<string, { forgot: number; meh: number; know: number }> = {};
+    for (const a of attempts) {
+      if (!wordStats[a.word_id]) wordStats[a.word_id] = { forgot: 0, meh: 0, know: 0 };
+      if (a.outcome === 'forgot') wordStats[a.word_id].forgot++;
+      else if (a.outcome === 'meh') wordStats[a.word_id].meh++;
+      else wordStats[a.word_id].know++;
+    }
+
+    const recapRows = sessionWords
+      .map(sw => ({ sw, stats: wordStats[sw.word_id] || { forgot: 0, meh: 0, know: 0 } }))
+      .sort((a, b) => b.stats.forgot - a.stats.forgot || b.stats.meh - a.stats.meh);
+
     return (
-      <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-200 p-12 text-center max-w-md w-full">
-          <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Check className="w-8 h-8" />
-          </div>
-          <h2 className="text-3xl font-extrabold text-gray-900 mb-2">Session Complete!</h2>
-          <div className="space-y-3 mb-8 text-gray-600">
-            <p><strong>Time Elapsed:</strong> {formatTime(elapsedSeconds)}</p>
-            <p><strong>Total Cards Seen:</strong> {attempts.length}</p>
-            <p><strong>Accuracy:</strong> {accuracy}%</p>
-          </div>
-          {isSaving ? (
-            <div className="text-blue-500 font-medium mb-4 flex items-center justify-center gap-2">
-               <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-               Saving Progress...
+      <main className="min-h-screen bg-gray-50 p-6">
+        <EditWordModal
+          isOpen={!!editingWord}
+          onClose={() => setEditingWord(null)}
+          word={editingWord}
+          onSuccess={() => setEditingWord(null)}
+        />
+        <div className="max-w-2xl mx-auto">
+          {/* Header */}
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-200 p-8 text-center mb-6">
+            <div className="w-14 h-14 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Check className="w-7 h-7" />
             </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={() => {
-                  setQueue([]);
-                  setTotalSessionSize(0);
-                  setMasteredCount(0);
-                  setAttempts([]);
-                  setIsFinished(false);
-                  setElapsedSeconds(0);
-                  fetchSessionData();
-                }}
-                className="w-full px-6 py-4 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition shadow"
-              >
-                Start New Session
-              </button>
-              <button
-                onClick={() => router.push("/")}
-                className="w-full px-6 py-4 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition"
-              >
-                Return to Dashboard
-              </button>
+            <h2 className="text-2xl font-extrabold text-gray-900 mb-4">Session Complete!</h2>
+            <div className="flex justify-center gap-8 text-gray-600 mb-6">
+              <div><div className="text-2xl font-bold text-gray-900">{formatTime(elapsedSeconds)}</div><div className="text-xs uppercase tracking-wide text-gray-400">Time</div></div>
+              <div><div className="text-2xl font-bold text-gray-900">{attempts.length}</div><div className="text-xs uppercase tracking-wide text-gray-400">Cards Seen</div></div>
+              <div><div className="text-2xl font-bold text-gray-900">{accuracy}%</div><div className="text-xs uppercase tracking-wide text-gray-400">Accuracy</div></div>
             </div>
-          )}
+            {isSaving ? (
+              <div className="text-blue-500 font-medium flex items-center justify-center gap-2">
+                <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                Saving Progress...
+              </div>
+            ) : (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setQueue([]); setTotalSessionSize(0); setMasteredCount(0);
+                    setAttempts([]); setIsFinished(false); setElapsedSeconds(0);
+                    fetchSessionData();
+                  }}
+                  className="flex-1 px-5 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition"
+                >
+                  New Session
+                </button>
+                <button
+                  onClick={() => router.push("/")}
+                  className="flex-1 px-5 py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition"
+                >
+                  Dashboard
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Word recap list */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+              <span className="text-sm font-bold text-gray-700 uppercase tracking-wide">Session Words</span>
+              <span className="text-xs text-gray-400">{recapRows.length} words · sorted by mistakes</span>
+            </div>
+            <div className="divide-y divide-gray-100">
+              {recapRows.map(({ sw, stats }) => (
+                <div key={sw.word_id} className="flex items-center px-5 py-3 hover:bg-gray-50 transition gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-900 font-serif">{sw.words_dim.greek_text}</span>
+                      <span className="text-gray-400">·</span>
+                      <span className="text-gray-600 text-sm truncate">{sw.words_dim.french_text}</span>
+                    </div>
+                    {sw.words_dim.theme && (
+                      <span className="text-xs text-gray-400">{sw.words_dim.theme}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 text-xs font-semibold">
+                    {stats.forgot > 0 && <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded-full">✗ {stats.forgot}</span>}
+                    {stats.meh > 0 && <span className="px-2 py-0.5 bg-yellow-100 text-yellow-600 rounded-full">? {stats.meh}</span>}
+                    {stats.know > 0 && <span className="px-2 py-0.5 bg-green-100 text-green-600 rounded-full">✓ {stats.know}</span>}
+                  </div>
+                  <button
+                    onClick={() => setEditingWord(sw.words_dim)}
+                    className="p-1.5 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-full transition"
+                    title="Edit word"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </main>
     );
@@ -315,7 +393,21 @@ function PracticeSession() {
                 <span className={`text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full ${isRec ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'}`}>
                   {isRec ? 'Recognition' : 'Production'}
                 </span>
-                <button 
+                <button
+                  onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(promptText); }}
+                  className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors z-10"
+                  title="Copy word"
+                >
+                  <Copy className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); window.open(`https://www.google.com/search?q=${encodeURIComponent(currentWord.words_dim.greek_text + ' meaning')}`, '_blank'); }}
+                  className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors z-10"
+                  title="Search online"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+                <button
                   onClick={(e) => { e.stopPropagation(); setEditingWord(currentWord.words_dim); }}
                   className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors z-10"
                   title="Edit Word"
@@ -351,7 +443,21 @@ function PracticeSession() {
                 </span>
               </div>
               <div className="absolute top-6 right-6 flex items-center gap-2">
-                <button 
+                <button
+                  onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(translationText); }}
+                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-full transition-colors z-10"
+                  title="Copy word"
+                >
+                  <Copy className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); window.open(`https://www.google.com/search?q=${encodeURIComponent(currentWord.words_dim.greek_text + ' meaning')}`, '_blank'); }}
+                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-full transition-colors z-10"
+                  title="Search online"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+                <button
                   onClick={(e) => { e.stopPropagation(); setEditingWord(currentWord.words_dim); }}
                   className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-full transition-colors z-10"
                   title="Edit Word"
@@ -382,14 +488,15 @@ function PracticeSession() {
                   <button
                     onClick={(e) => handleInterest(e, "down")}
                     className={`px-4 py-2 rounded-full text-sm font-bold transition-colors ${currentInterestToggle === "down" ? "bg-red-500/20 text-red-400" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+                    title="Drop from this session"
                   >
-                    Low
+                    Drop
                   </button>
                   <button
                     onClick={(e) => handleInterest(e, "none")}
                     className={`px-4 py-2 rounded-full text-sm font-bold transition-colors ${currentInterestToggle === "none" ? "bg-gray-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
                   >
-                    Std
+                    Neutral
                   </button>
                   <button
                     onClick={(e) => handleInterest(e, "up")}

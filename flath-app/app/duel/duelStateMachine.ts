@@ -20,7 +20,6 @@ export type DuelAction =
   | { type: "CLAIM"; player: PlayerId; claim: Claim; now: number }
   | { type: "REVEAL" }
   | { type: "GRADE"; player: PlayerId; grade: Grade }
-  | { type: "LOCKIN"; player: PlayerId }
   | { type: "REQUEST_NEXT" }
   | { type: "COUNTDOWN_TICK" }
   | { type: "FINISH"; now: number }
@@ -40,10 +39,8 @@ function makeRound(queue: SessionWord[], cardIndex: number): RoundState {
     p1ClaimAt: null,
     p2ClaimAt: null,
     winner: null,
-    p1GradeOfP2: null,
-    p2GradeOfP1: null,
-    p1ConfirmedLockin: false,
-    p2ConfirmedLockin: false,
+    p1Grade: null,
+    p2Grade: null,
     p1RoundPoints: 0,
     p2RoundPoints: 0,
     countdown: null,
@@ -123,39 +120,21 @@ export function duelReducer(state: DuelState, action: DuelAction): DuelState {
 
       const round = { ...state.round };
       if (action.player === "p1") {
-        // P1 uses Z/X/C to grade P2's claim.
-        round.p1GradeOfP2 = action.grade;
+        // P1 uses Z/X/C to self-grade.
+        round.p1Grade = action.grade;
       } else {
-        // P2 uses B/N/M to grade P1's (spoken) answer.
-        round.p2GradeOfP1 = action.grade;
+        // P2 uses B/N/M to self-grade.
+        round.p2Grade = action.grade;
       }
 
-      // Both grades in → move to lockin.
-      if (round.p1GradeOfP2 && round.p2GradeOfP1) {
-        round.phase = "await_lockin";
-      }
+      // Both grades in → compute points and move directly to scored (no lockin step).
+      if (round.p1Grade && round.p2Grade) {
+        const { p1Claim, p2Claim, p1Grade, p2Grade, winner, card } = round;
+        if (!p1Claim || !p2Claim) return state;
 
-      return { ...state, round };
-    }
-
-    case "LOCKIN": {
-      if (state.stage !== "playing" || !state.round) return state;
-      if (state.round.phase !== "await_lockin") return state;
-
-      const round = { ...state.round };
-      if (action.player === "p1") round.p1ConfirmedLockin = true;
-      else round.p2ConfirmedLockin = true;
-
-      if (round.p1ConfirmedLockin && round.p2ConfirmedLockin) {
-        // Compute points and finalize.
-        const { p1Claim, p2Claim, p1GradeOfP2, p2GradeOfP1, winner, card } = round;
-        // Guard — types guarantee these, but keep TS happy.
-        if (!p1Claim || !p2Claim || !p1GradeOfP2 || !p2GradeOfP1) return state;
-
-        // P2 grades P1's answer → P1's points.
-        // P1 grades P2's claim → P2's points.
-        const p1Points = scoreRound(p1Claim, p2GradeOfP1, winner === "p1");
-        const p2Points = scoreRound(p2Claim, p1GradeOfP2, winner === "p2");
+        // Each player's score uses their own self-grade.
+        const p1Points = scoreRound(p1Claim, p1Grade, winner === "p1");
+        const p2Points = scoreRound(p2Claim, p2Grade, winner === "p2");
         round.p1RoundPoints = p1Points;
         round.p2RoundPoints = p2Points;
         round.phase = "scored";
@@ -168,8 +147,8 @@ export function duelReducer(state: DuelState, action: DuelAction): DuelState {
           p1Claim,
           p2Claim,
           winner,
-          p1GradeOfP2,
-          p2GradeOfP1,
+          p1Grade,
+          p2Grade,
           p1Points,
           p2Points,
           p1CumScore: +(prev.p1 + p1Points).toFixed(1),

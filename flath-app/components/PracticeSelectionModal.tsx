@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { X, Play } from "lucide-react";
+import { X, Play, Shuffle } from "lucide-react";
+
+const SESSION_SIZES = [10, 25, 50] as const;
+type SessionSize = typeof SESSION_SIZES[number];
 
 interface PracticeSelectionModalProps {
   isOpen: boolean;
@@ -13,6 +16,8 @@ export function PracticeSelectionModal({ isOpen, onClose, userId }: PracticeSele
   const router = useRouter();
   const [packs, setPacks] = useState<any[]>([]);
   const [isLoadingPacks, setIsLoadingPacks] = useState(false);
+  const [smartLimit, setSmartLimit] = useState<SessionSize>(25);
+  const [randomLimit, setRandomLimit] = useState<SessionSize>(25);
 
   useEffect(() => {
     if (isOpen && userId) {
@@ -69,21 +74,70 @@ export function PracticeSelectionModal({ isOpen, onClose, userId }: PracticeSele
         </div>
         
         <div className="p-6 space-y-6">
-          {/* Choice B: Smart Shuffle */}
+          {/* Smart Shuffle */}
           <div>
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Choice B: Default</h3>
-            <button
-              onClick={() => router.push("/practice?mode=smart")}
-              className="w-full flex flex-col items-start p-4 bg-green-50 border border-green-200 rounded-xl hover:bg-green-100 hover:border-green-300 transition text-left"
-            >
-              <div className="flex items-center gap-2 font-bold text-green-700 mb-1">
-                <Play className="w-4 h-4" />
-                Smart Shuffle
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Smart Shuffle</h3>
+            <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 font-bold text-green-700">
+                  <Play className="w-4 h-4" />
+                  Smart Shuffle
+                </div>
+                <div className="flex gap-1">
+                  {SESSION_SIZES.map(n => (
+                    <button
+                      key={n}
+                      onClick={() => setSmartLimit(n)}
+                      className={`px-2 py-0.5 rounded text-xs font-semibold border transition ${smartLimit === n ? "bg-green-600 text-white border-green-600" : "bg-white text-green-700 border-green-300 hover:border-green-500"}`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <p className="text-sm text-green-600/80">
-                A dynamic session of 50 words selected by your priority rules (Heat &gt; Success &gt; Frequency).
+              <p className="text-sm text-green-600/80 mb-3">
+                Top {smartLimit} words selected by your priority rules (Heat › Success › Frequency).
               </p>
-            </button>
+              <button
+                onClick={() => router.push(`/practice?mode=smart&limit=${smartLimit}`)}
+                className="w-full py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition"
+              >
+                Start
+              </button>
+            </div>
+          </div>
+
+          {/* Random */}
+          <div>
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Random</h3>
+            <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 font-bold text-purple-700">
+                  <Shuffle className="w-4 h-4" />
+                  Random
+                </div>
+                <div className="flex gap-1">
+                  {SESSION_SIZES.map(n => (
+                    <button
+                      key={n}
+                      onClick={() => setRandomLimit(n)}
+                      className={`px-2 py-0.5 rounded text-xs font-semibold border transition ${randomLimit === n ? "bg-purple-600 text-white border-purple-600" : "bg-white text-purple-700 border-purple-300 hover:border-purple-500"}`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="text-sm text-purple-600/80 mb-3">
+                {randomLimit} words picked at random from your library.
+              </p>
+              <button
+                onClick={() => router.push(`/practice?mode=random&limit=${randomLimit}`)}
+                className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg transition"
+              >
+                Start
+              </button>
+            </div>
           </div>
 
           {/* Choice A: Select Word Pack */}

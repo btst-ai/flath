@@ -3,7 +3,7 @@ import type { SessionWord, CardMode } from "@/lib/sessionQueue";
 export type PlayerId = "p1" | "p2";
 export type Claim = "know" | "meh" | "forgot";
 export type Grade = "right" | "meh" | "wrong";
-export type DataSource = "p1" | "p2" | "avg";
+export type DataSource = "p1" | "p2" | "avg" | "random";
 
 /** Per-player stable identity for the duel. */
 export interface PlayerIdentity {
@@ -30,9 +30,8 @@ export interface DuelConfig {
 export type Phase =
   | "idle_claim"      // waiting for both players to claim confidence
   | "await_reveal"    // both claimed; cue line announces Winner/no-speaker; any key → reveal
-  | "reveal"          // card back visible; P1 grades P2 (ZXC), P2 grades P1 (BNM)
-  | "await_lockin"    // grades done; waiting for P1=Q AND P2=P to confirm
-  | "scored"          // points applied; any key → countdown
+  | "reveal"          // card back visible; each player self-grades — P1 (ZXC), P2 (BNM)
+  | "scored"          // points applied as soon as both grades are in; any key → countdown
   | "countdown";      // 3 → 2 → 1 → next card
 
 /** Per-card transient state, reset between rounds. */
@@ -45,10 +44,8 @@ export interface RoundState {
   p1ClaimAt: number | null;       // performance.now() timestamp
   p2ClaimAt: number | null;
   winner: PlayerId | null;        // null = tied below I-Know (no bonus)
-  p1GradeOfP2: Grade | null;      // P1 grades P2 via Z/X/C
-  p2GradeOfP1: Grade | null;      // P2 grades P1 via B/N/M
-  p1ConfirmedLockin: boolean;     // P1 pressed Q
-  p2ConfirmedLockin: boolean;     // P2 pressed P
+  p1Grade: Grade | null;          // P1 self-grades via Z/X/C
+  p2Grade: Grade | null;          // P2 self-grades via B/N/M
   p1RoundPoints: number;          // computed at SCORED
   p2RoundPoints: number;
   countdown: 3 | 2 | 1 | null;
@@ -62,8 +59,8 @@ export interface FinalizedRound {
   p1Claim: Claim;
   p2Claim: Claim;
   winner: PlayerId | null;
-  p1GradeOfP2: Grade;
-  p2GradeOfP1: Grade;
+  p1Grade: Grade;
+  p2Grade: Grade;
   p1Points: number;
   p2Points: number;
   /** Cumulative score after this round. */

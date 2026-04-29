@@ -67,7 +67,7 @@ export interface FinishDuelSummary {
   p1Flag: string;
   p2Flag: string;
   packId: string | null;
-  dataSource: "p1" | "p2" | "avg";
+  dataSource: "p1" | "p2" | "avg" | "random";
   cardMode: "prod" | "rec" | "mixed";
   p1FinalScore: number;
   p2FinalScore: number;
@@ -96,7 +96,7 @@ export async function finishDuel(
       p1_flag: summary.p1Flag,
       p2_flag: summary.p2Flag,
       pack_id: summary.packId,
-      data_source: summary.dataSource,
+      data_source: summary.dataSource === "random" ? "p1" : summary.dataSource,
       card_mode: summary.cardMode,
       p1_final_score: summary.p1FinalScore,
       p2_final_score: summary.p2FinalScore,

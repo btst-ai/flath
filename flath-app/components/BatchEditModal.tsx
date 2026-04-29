@@ -111,9 +111,11 @@ export function BatchEditModal({ isOpen, onClose, selectedWordIds, onSuccess }: 
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
               placeholder="e.g., Geopolitics (leave empty to keep current)"
             />
-            {showThemeSuggestions && theme.length > 0 && (
+            {showThemeSuggestions && (
               (() => {
-                const filtered = availableThemes.filter(t => t.toLowerCase().includes(theme.toLowerCase()) && t.toLowerCase() !== theme.toLowerCase());
+                const filtered = theme.length === 0
+                  ? availableThemes
+                  : availableThemes.filter(t => t.toLowerCase().includes(theme.toLowerCase()) && t.toLowerCase() !== theme.toLowerCase());
                 if (filtered.length === 0) return null;
                 return (
                   <ul className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">

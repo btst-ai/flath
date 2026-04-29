@@ -7,6 +7,7 @@ import {
   fetchUserWords,
   sortSoloPriority,
   sortAveragePriority,
+  randomShuffle,
   assignTracks,
   type SessionWord,
   type CardMode,
@@ -40,6 +41,7 @@ export function DuelLobby({ p1UserId, initialConfig, onStart, onCancel }: Props)
   const [dataSource, setDataSource] = useState<DataSource>(initialConfig?.dataSource ?? "avg");
   const [cardMode, setCardMode] = useState<CardMode>(initialConfig?.cardMode ?? "mixed");
   const [packId, setPackId] = useState<string | null>(initialConfig?.packId ?? null);
+  const [totalCards, setTotalCards] = useState(initialConfig?.totalCards ?? 20);
 
   const [packs, setPacks] = useState<Array<{ id: string; name: string; is_smart: boolean }>>([]);
   const [isLoadingPacks, setIsLoadingPacks] = useState(false);
@@ -59,7 +61,7 @@ export function DuelLobby({ p1UserId, initialConfig, onStart, onCancel }: Props)
 
       const themes = new Set<string>();
       if (wordsData) {
-        (wordsData as Array<{ words_dim: { theme: string | null } | null }>).forEach(w => {
+        (wordsData as unknown as Array<{ words_dim: { theme: string | null } | null }>).forEach(w => {
           if (w.words_dim?.theme) themes.add(w.words_dim.theme);
         });
       }
@@ -92,8 +94,8 @@ export function DuelLobby({ p1UserId, initialConfig, onStart, onCancel }: Props)
     const trimmed = p2Email.trim();
     if (trimmed.length === 0) {
       setP2State({ kind: "empty" });
-      // Guest mode: only p1 source is valid.
-      if (dataSource !== "p1") setDataSource("p1");
+      // Guest mode: p2/avg require a connected P2 — fall back to p1.
+      if (dataSource !== "p1" && dataSource !== "random") setDataSource("p1");
       return;
     }
     setP2State({ kind: "checking" });
@@ -140,24 +142,30 @@ export function DuelLobby({ p1UserId, initialConfig, onStart, onCancel }: Props)
         }
         const p1Words = await fetchUserWords(p1UserId, packId);
         const ranked = sortSoloPriority(p1Words);
-        queue = assignTracks(ranked.slice(0, 50), cardMode);
+        queue = assignTracks(ranked.slice(0, totalCards), cardMode);
       } else {
         // Smart shuffle.
-        if (dataSource === "p1" || p2Identity.isGuest) {
+        const effectiveDataSource = p2Identity.isGuest && dataSource !== "random"
+          ? "p1" : dataSource;
+        if (effectiveDataSource === "random") {
+          const p1Words = await fetchUserWords(p1UserId, null);
+          const shuffled = randomShuffle(p1Words);
+          queue = assignTracks(shuffled.slice(0, totalCards), cardMode);
+        } else if (effectiveDataSource === "p1") {
           const p1Words = await fetchUserWords(p1UserId, null);
           const ranked = sortSoloPriority(p1Words);
-          queue = assignTracks(ranked.slice(0, 50), cardMode);
-        } else if (dataSource === "p2" && p2Identity.userId) {
+          queue = assignTracks(ranked.slice(0, totalCards), cardMode);
+        } else if (effectiveDataSource === "p2" && p2Identity.userId) {
           const p2Words = await fetchUserWords(p2Identity.userId, null);
           const ranked = sortSoloPriority(p2Words);
-          queue = assignTracks(ranked.slice(0, 50), cardMode);
-        } else if (dataSource === "avg" && p2Identity.userId) {
+          queue = assignTracks(ranked.slice(0, totalCards), cardMode);
+        } else if (effectiveDataSource === "avg" && p2Identity.userId) {
           const [p1Words, p2Words] = await Promise.all([
             fetchUserWords(p1UserId, null),
             fetchUserWords(p2Identity.userId, null),
           ]);
           const ranked = sortAveragePriority(p1Words, p2Words);
-          queue = assignTracks(ranked.slice(0, 50), cardMode);
+          queue = assignTracks(ranked.slice(0, totalCards), cardMode);
         }
       }
 
@@ -166,15 +174,12 @@ export function DuelLobby({ p1UserId, initialConfig, onStart, onCancel }: Props)
         setIsStarting(false);
         return;
       }
-      if (queue.length < 50) {
-        // OK to play with fewer — just proceed with what we have.
-      }
 
       const config: DuelConfig = {
         p1: p1Identity,
         p2: p2Identity,
         source,
-        dataSource: p2Identity.isGuest ? "p1" : dataSource,
+        dataSource: p2Identity.isGuest && dataSource !== "random" ? "p1" : dataSource,
         packId: source === "pack" ? packId : null,
         cardMode,
         totalCards: queue.length,
@@ -227,7 +232,7 @@ export function DuelLobby({ p1UserId, initialConfig, onStart, onCancel }: Props)
           </div>
           <div>
             <h1 className="text-2xl font-extrabold text-gray-900">Duel</h1>
-            <p className="text-sm text-gray-500">Two players, one keyboard. 50 cards.</p>
+            <p className="text-sm text-gray-500">Two players, one keyboard.</p>
           </div>
         </div>
 
@@ -250,7 +255,7 @@ export function DuelLobby({ p1UserId, initialConfig, onStart, onCancel }: Props)
               onChange={e => setP1Name(e.target.value)}
               className="w-full text-lg font-semibold text-gray-900 bg-transparent border-b border-blue-200 focus:outline-none focus:border-blue-500"
             />
-            <p className="mt-2 text-xs text-gray-500">Keys: Z · X · C · Q</p>
+            <p className="mt-2 text-xs text-gray-500">Keys: Z · X · C</p>
           </div>
           {/* P2 */}
           <div className="p-4 bg-purple-50 border border-purple-100 rounded-xl">
@@ -279,7 +284,7 @@ export function DuelLobby({ p1UserId, initialConfig, onStart, onCancel }: Props)
             <p className={`mt-2 text-xs ${p2State.kind === "invalid" ? "text-red-600" : "text-gray-500"}`}>
               {p2StatusLabel()}
             </p>
-            <p className="mt-2 text-xs text-gray-500">Keys: B · N · M · P</p>
+            <p className="mt-2 text-xs text-gray-500">Keys: B · N · M</p>
           </div>
         </div>
 
@@ -302,9 +307,10 @@ export function DuelLobby({ p1UserId, initialConfig, onStart, onCancel }: Props)
         {source === "smart" && (
           <div className="mb-6">
             <label className="text-xs font-bold uppercase tracking-wider text-gray-500 block mb-2">Data source</label>
-            <div className="flex gap-2">
-              {(["p1", "p2", "avg"] as DataSource[]).map(opt => {
+            <div className="flex gap-2 flex-wrap">
+              {(["p1", "p2", "avg", "random"] as DataSource[]).map(opt => {
                 const disabled = !p2Connected && (opt === "p2" || opt === "avg");
+                const label = opt === "p1" ? "P1 ranks" : opt === "p2" ? "P2 ranks" : opt === "avg" ? "Average" : "Random";
                 return (
                   <button
                     key={opt}
@@ -316,7 +322,7 @@ export function DuelLobby({ p1UserId, initialConfig, onStart, onCancel }: Props)
                       : "bg-white border-gray-200 text-gray-600"
                     }`}
                   >
-                    {opt === "p1" ? "P1 ranks" : opt === "p2" ? "P2 ranks" : "Average of both"}
+                    {label}
                   </button>
                 );
               })}
@@ -348,6 +354,22 @@ export function DuelLobby({ p1UserId, initialConfig, onStart, onCancel }: Props)
             )}
           </div>
         )}
+
+        {/* Card count */}
+        <div className="mb-6">
+          <label className="text-xs font-bold uppercase tracking-wider text-gray-500 block mb-2">Number of cards</label>
+          <div className="flex gap-2">
+            {[10, 20, 50].map(n => (
+              <button
+                key={n}
+                onClick={() => setTotalCards(n)}
+                className={`flex-1 px-3 py-2 rounded-xl text-sm font-medium border transition ${totalCards === n ? "bg-orange-50 border-orange-300 text-orange-700" : "bg-white border-gray-200 text-gray-600"}`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Card mode */}
         <div className="mb-8">

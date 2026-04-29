@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Trophy, RotateCw, Home } from "lucide-react";
 import type { DuelState } from "./duelTypes";
 import { currentScores } from "./duelStateMachine";
@@ -16,6 +16,7 @@ interface Props {
 export function DuelVictory({ state, onRematch, onHome }: Props) {
   const [saving, setSaving] = useState(true);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const { p1, p2 } = currentScores(state);
   const winner: "p1" | "p2" | "tie" = p1 > p2 ? "p1" : p2 > p1 ? "p2" : "tie";
@@ -31,6 +32,33 @@ export function DuelVictory({ state, onRematch, onHome }: Props) {
     const s = (total % 60).toString().padStart(2, "0");
     return `${m}:${s}`;
   };
+
+  // Play winner's national anthem on mount.
+  // Pre-req: drop fr_anthem.mp3 and gr_anthem.mp3 into flath-app/public/.
+  useEffect(() => {
+    if (!config) return;
+    const flagToAnthem: Record<string, string> = {
+      "🇫🇷": "/fr_anthem.mp3",
+      "🇬🇷": "/gr_anthem.mp3",
+    };
+    const winnerFlag =
+      winner === "p1" ? config.p1.flag :
+      winner === "p2" ? config.p2.flag : null;
+    const src = winnerFlag ? (flagToAnthem[winnerFlag] ?? null) : null;
+    if (src) {
+      const audio = new Audio(src);
+      audioRef.current = audio;
+      audio.play().catch(() => {}); // ignore autoplay policy errors silently
+    }
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Persist on mount.
   useEffect(() => {

@@ -38,6 +38,7 @@ export default function VaultPage() {
   const [isLoadingVocab, setIsLoadingVocab] = useState(false);
   const [showUploader, setShowUploader] = useState(false);
   const [selectedWordIds, setSelectedWordIds] = useState<Set<string>>(new Set());
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
 
   // Sorting
   const [sortField, setSortField] = useState<SortField>("smart");
@@ -54,6 +55,12 @@ export default function VaultPage() {
   const [filterStatus, setFilterStatus] = useState<"all" | "fav">("all");
   const [filterPOS, setFilterPOS] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterLastReviewed, setFilterLastReviewed] = useState<"today" | "week" | "month" | null>(null);
+  const [filterLastReviewedMode, setFilterLastReviewedMode] = useState<"less_than" | "more_than">("less_than");
+  const [filterHeat, setFilterHeat] = useState<"hot" | "warm" | "cold" | null>(null);
+  const [customThemes, setCustomThemes] = useState<string[]>([]);
+  const [showNewThemeInput, setShowNewThemeInput] = useState(false);
+  const [newThemeName, setNewThemeName] = useState("");
 
   const [editingWord, setEditingWord] = useState<any | null>(null);
   const [isBatchEditing, setIsBatchEditing] = useState(false);
@@ -64,7 +71,7 @@ export default function VaultPage() {
   // Reset visible count when filters or sorting change
   useEffect(() => {
     setVisibleCount(50);
-  }, [activeTab, sortField, sortDirection, filterTheme, filterSuccessMin, filterSuccessMax, filterFreqMin, filterFreqMax, filterReviewMin, filterReviewMax, filterStatus, searchQuery, filterPOS]);
+  }, [activeTab, sortField, sortDirection, filterTheme, filterSuccessMin, filterSuccessMax, filterFreqMin, filterFreqMax, filterReviewMin, filterReviewMax, filterStatus, searchQuery, filterPOS, filterLastReviewed, filterLastReviewedMode, filterHeat]);
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
@@ -335,6 +342,24 @@ export default function VaultPage() {
     if (filterReviewMax !== "") {
       data = data.filter(item => (item.review_count || 0) <= filterReviewMax);
     }
+    if (filterLastReviewed) {
+      const now = new Date();
+      const days = filterLastReviewed === "today" ? 1 : filterLastReviewed === "week" ? 7 : 30;
+      const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      if (filterLastReviewedMode === "less_than") {
+        data = data.filter(item => item.last_reviewed && new Date(item.last_reviewed) >= cutoff);
+      } else {
+        data = data.filter(item => !item.last_reviewed || new Date(item.last_reviewed) < cutoff);
+      }
+    }
+    if (filterHeat) {
+      data = data.filter(item => {
+        const score = item.interest_score || 0;
+        if (filterHeat === "hot") return score > 5;
+        if (filterHeat === "warm") return score >= 1 && score <= 5;
+        return score <= 0;
+      });
+    }
 
     // Sort
     return [...data].sort((a, b) => {
@@ -343,12 +368,12 @@ export default function VaultPage() {
         const aHeat = a.interest_score || 0;
         const bHeat = b.interest_score || 0;
         if (aHeat !== bHeat) return sortDirection === "asc" ? bHeat - aHeat : aHeat - bHeat;
-        
+
         // 2. Success (asc)
         const aSuccess = (a.avg_success_rate_prod + a.avg_success_rate_rec) / 2;
         const bSuccess = (b.avg_success_rate_prod + b.avg_success_rate_rec) / 2;
         if (aSuccess !== bSuccess) return sortDirection === "asc" ? aSuccess - bSuccess : bSuccess - aSuccess;
-        
+
         // 3. Frequency (asc)
         const aFreq = a.words_dim?.frequency_rank > 0 ? a.words_dim.frequency_rank : 99999;
         const bFreq = b.words_dim?.frequency_rank > 0 ? b.words_dim.frequency_rank : 99999;
@@ -357,7 +382,7 @@ export default function VaultPage() {
 
       let aVal: any = "";
       let bVal: any = "";
-      
+
       switch (sortField) {
         case "greek_text":
           aVal = a.words_dim?.greek_text || "";
@@ -393,7 +418,7 @@ export default function VaultPage() {
       if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
       return 0;
     });
-  }, [myLibrary, sortField, sortDirection, filterTheme, filterSuccessMin, filterSuccessMax, filterFreqMin, filterFreqMax, filterReviewMin, filterReviewMax, filterStatus, searchQuery, filterPOS]);
+  }, [myLibrary, sortField, sortDirection, filterTheme, filterSuccessMin, filterSuccessMax, filterFreqMin, filterFreqMax, filterReviewMin, filterReviewMax, filterStatus, searchQuery, filterPOS, filterLastReviewed, filterLastReviewedMode, filterHeat]);
 
   const displayedRemoved = useMemo(() => {
     let data = myLibrary.filter(w => w.is_archived);
@@ -435,6 +460,24 @@ export default function VaultPage() {
     if (filterReviewMax !== "") {
       data = data.filter(item => (item.review_count || 0) <= filterReviewMax);
     }
+    if (filterLastReviewed) {
+      const now = new Date();
+      const days = filterLastReviewed === "today" ? 1 : filterLastReviewed === "week" ? 7 : 30;
+      const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      if (filterLastReviewedMode === "less_than") {
+        data = data.filter(item => item.last_reviewed && new Date(item.last_reviewed) >= cutoff);
+      } else {
+        data = data.filter(item => !item.last_reviewed || new Date(item.last_reviewed) < cutoff);
+      }
+    }
+    if (filterHeat) {
+      data = data.filter(item => {
+        const score = item.interest_score || 0;
+        if (filterHeat === "hot") return score > 5;
+        if (filterHeat === "warm") return score >= 1 && score <= 5;
+        return score <= 0;
+      });
+    }
 
     // Sort
     return [...data].sort((a, b) => {
@@ -443,12 +486,12 @@ export default function VaultPage() {
         const aHeat = a.interest_score || 0;
         const bHeat = b.interest_score || 0;
         if (aHeat !== bHeat) return sortDirection === "asc" ? bHeat - aHeat : aHeat - bHeat;
-        
+
         // 2. Success (asc)
         const aSuccess = (a.avg_success_rate_prod + a.avg_success_rate_rec) / 2;
         const bSuccess = (b.avg_success_rate_prod + b.avg_success_rate_rec) / 2;
         if (aSuccess !== bSuccess) return sortDirection === "asc" ? aSuccess - bSuccess : bSuccess - aSuccess;
-        
+
         // 3. Frequency (asc)
         const aFreq = a.words_dim?.frequency_rank > 0 ? a.words_dim.frequency_rank : 99999;
         const bFreq = b.words_dim?.frequency_rank > 0 ? b.words_dim.frequency_rank : 99999;
@@ -457,7 +500,7 @@ export default function VaultPage() {
 
       let aVal: any = "";
       let bVal: any = "";
-      
+
       switch (sortField) {
         case "greek_text":
           aVal = a.words_dim?.greek_text || "";
@@ -493,7 +536,7 @@ export default function VaultPage() {
       if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
       return 0;
     });
-  }, [myLibrary, sortField, sortDirection, filterTheme, filterSuccessMin, filterSuccessMax, filterFreqMin, filterFreqMax, filterReviewMin, filterReviewMax, filterStatus, searchQuery, filterPOS]);
+  }, [myLibrary, sortField, sortDirection, filterTheme, filterSuccessMin, filterSuccessMax, filterFreqMin, filterFreqMax, filterReviewMin, filterReviewMax, filterStatus, searchQuery, filterPOS, filterLastReviewed, filterLastReviewedMode, filterHeat]);
 
   const displayedOthers = useMemo(() => {
     let data = othersLibrary;
@@ -551,11 +594,25 @@ export default function VaultPage() {
     });
   }, [othersLibrary, sortField, sortDirection, filterTheme, filterFreqMin, filterFreqMax, searchQuery, filterPOS]);
 
-  const toggleSelection = (id: string) => {
-    const newSet = new Set(selectedWordIds);
-    if (newSet.has(id)) newSet.delete(id);
-    else newSet.add(id);
-    setSelectedWordIds(newSet);
+  const toggleSelection = (id: string, index: number, metaKey: boolean) => {
+    const currentList =
+      activeTab === "my_library" ? displayedLibrary.map(w => w.word_id) :
+      activeTab === "removed"    ? displayedRemoved.map(w => w.word_id) :
+                                   displayedOthers.map(w => w.id);
+
+    if (metaKey && lastSelectedIndex !== null && lastSelectedIndex !== index) {
+      const lo = Math.min(lastSelectedIndex, index);
+      const hi = Math.max(lastSelectedIndex, index);
+      const newSet = new Set(selectedWordIds);
+      for (let i = lo; i <= hi; i++) newSet.add(currentList[i]);
+      setSelectedWordIds(newSet);
+    } else {
+      const newSet = new Set(selectedWordIds);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      setSelectedWordIds(newSet);
+      setLastSelectedIndex(index);
+    }
   };
 
   const toggleAllSelection = () => {
@@ -579,8 +636,9 @@ export default function VaultPage() {
     othersLibrary.forEach(item => {
       if (item.theme) themes.add(item.theme);
     });
+    customThemes.forEach(t => themes.add(t));
     return Array.from(themes).sort();
-  }, [myLibrary, othersLibrary]);
+  }, [myLibrary, othersLibrary, customThemes]);
 
   const uniquePOS = useMemo(() => {
     const pos = new Set<string>();
@@ -753,14 +811,66 @@ export default function VaultPage() {
           <div className="flex flex-wrap gap-4 items-end">
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Theme</label>
-              <select 
-                value={filterTheme}
-                onChange={(e) => setFilterTheme(e.target.value)}
-                className="border border-gray-300 rounded p-1.5 text-sm"
-              >
-                <option value="">All Themes</option>
-                {uniqueThemes.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+              {showNewThemeInput ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={newThemeName}
+                    onChange={(e) => setNewThemeName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && newThemeName.trim()) {
+                        const name = newThemeName.trim();
+                        setCustomThemes(prev => prev.includes(name) ? prev : [...prev, name]);
+                        setFilterTheme(name);
+                        setNewThemeName("");
+                        setShowNewThemeInput(false);
+                      } else if (e.key === "Escape") {
+                        setNewThemeName("");
+                        setShowNewThemeInput(false);
+                      }
+                    }}
+                    placeholder="Theme name…"
+                    className="border border-blue-400 rounded p-1.5 text-sm w-32 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
+                  <button
+                    onClick={() => {
+                      if (newThemeName.trim()) {
+                        const name = newThemeName.trim();
+                        setCustomThemes(prev => prev.includes(name) ? prev : [...prev, name]);
+                        setFilterTheme(name);
+                      }
+                      setNewThemeName("");
+                      setShowNewThemeInput(false);
+                    }}
+                    className="text-blue-600 text-xs font-semibold hover:text-blue-800"
+                  >
+                    Add
+                  </button>
+                  <button
+                    onClick={() => { setNewThemeName(""); setShowNewThemeInput(false); }}
+                    className="text-gray-400 text-xs hover:text-gray-600"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <select
+                  value={filterTheme}
+                  onChange={(e) => {
+                    if (e.target.value === "__new__") {
+                      setShowNewThemeInput(true);
+                    } else {
+                      setFilterTheme(e.target.value);
+                    }
+                  }}
+                  className="border border-gray-300 rounded p-1.5 text-sm"
+                >
+                  <option value="">All Themes</option>
+                  <option value="__new__">+ New Theme</option>
+                  {uniqueThemes.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              )}
             </div>
 
             <div>
@@ -821,6 +931,60 @@ export default function VaultPage() {
                   />
                   <label htmlFor="fav" className="text-sm font-medium text-gray-700">Favorites Only</label>
                 </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Last Reviewed</label>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex gap-1">
+                      {(["today", "week", "month"] as const).map(period => (
+                        <button
+                          key={period}
+                          onClick={() => setFilterLastReviewed(filterLastReviewed === period ? null : period)}
+                          className={`px-2 py-1 rounded text-xs font-medium border transition ${filterLastReviewed === period ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"}`}
+                        >
+                          {period === "today" ? "Today" : period === "week" ? "This Week" : "This Month"}
+                        </button>
+                      ))}
+                    </div>
+                    {filterLastReviewed && (
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => setFilterLastReviewedMode("less_than")}
+                          className={`px-2 py-1 rounded text-xs font-medium border transition ${filterLastReviewedMode === "less_than" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 border-gray-300 hover:border-indigo-400"}`}
+                        >
+                          Reviewed within
+                        </button>
+                        <button
+                          onClick={() => setFilterLastReviewedMode("more_than")}
+                          className={`px-2 py-1 rounded text-xs font-medium border transition ${filterLastReviewedMode === "more_than" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 border-gray-300 hover:border-indigo-400"}`}
+                        >
+                          Not reviewed within
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Heat</label>
+                  <div className="flex gap-1">
+                    {(["hot", "warm", "cold"] as const).map(level => (
+                      <button
+                        key={level}
+                        onClick={() => setFilterHeat(filterHeat === level ? null : level)}
+                        className={`px-2 py-1 rounded text-xs font-medium border transition ${
+                          filterHeat === level
+                            ? level === "hot" ? "bg-red-500 text-white border-red-500"
+                              : level === "warm" ? "bg-orange-400 text-white border-orange-400"
+                              : "bg-blue-300 text-white border-blue-300"
+                            : "bg-white text-gray-600 border-gray-300 hover:border-gray-400"
+                        }`}
+                      >
+                        {level === "hot" ? "🔥 Hot" : level === "warm" ? "~ Warm" : "❄ Cold"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </>
             )}
 
@@ -846,6 +1010,7 @@ export default function VaultPage() {
                 setFilterTheme(""); setFilterSuccessMin(""); setFilterSuccessMax("");
                 setFilterFreqMin(""); setFilterFreqMax(""); setFilterReviewMin(""); setFilterReviewMax("");
                 setFilterStatus("all"); setSearchQuery(""); setFilterPOS("");
+                setFilterLastReviewed(null); setFilterLastReviewedMode("less_than"); setFilterHeat(null);
                 setSortField("smart"); setSortDirection("asc");
               }}
               className="text-sm text-blue-600 hover:text-blue-800 underline pb-2"
@@ -860,7 +1025,7 @@ export default function VaultPage() {
           <div className="flex items-center gap-4">
             <div className="flex bg-white rounded-lg p-1 border border-gray-200 shadow-sm">
               <button
-                onClick={() => { setActiveTab("my_library"); setSelectedWordIds(new Set()); }}
+                onClick={() => { setActiveTab("my_library"); setSelectedWordIds(new Set()); setLastSelectedIndex(null); }}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition ${
                   activeTab === "my_library" ? "bg-gray-100 text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
                 }`}
@@ -868,7 +1033,7 @@ export default function VaultPage() {
                 My Library ({displayedLibrary.length})
               </button>
               <button
-                onClick={() => { setActiveTab("added_by_others"); setSelectedWordIds(new Set()); }}
+                onClick={() => { setActiveTab("added_by_others"); setSelectedWordIds(new Set()); setLastSelectedIndex(null); }}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition ${
                   activeTab === "added_by_others" ? "bg-gray-100 text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
                 }`}
@@ -876,7 +1041,7 @@ export default function VaultPage() {
                 Added by Others ({displayedOthers.length})
               </button>
               <button
-                onClick={() => { setActiveTab("removed"); setSelectedWordIds(new Set()); }}
+                onClick={() => { setActiveTab("removed"); setSelectedWordIds(new Set()); setLastSelectedIndex(null); }}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition ${
                   activeTab === "removed" ? "bg-gray-100 text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
                 }`}
@@ -900,18 +1065,26 @@ export default function VaultPage() {
           <div className="flex items-center gap-2">
             {selectedWordIds.size > 0 && (activeTab === "my_library" || activeTab === "removed") && (
               <>
-                <button 
+                <button
                   onClick={() => setIsBatchEditing(true)}
                   className="px-3 py-1.5 bg-gray-200 text-gray-800 rounded-md text-sm font-medium hover:bg-gray-300 transition shadow"
                 >
                   Batch Edit ({selectedWordIds.size})
                 </button>
-                <button 
+                <button
                   onClick={handleCreatePackFromSelection}
                   className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition shadow"
                 >
                   Create Word Pack ({selectedWordIds.size})
                 </button>
+                {activeTab === "my_library" && (
+                  <button
+                    onClick={() => router.push(`/practice?word_ids=${Array.from(selectedWordIds).join(",")}`)}
+                    className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 transition shadow"
+                  >
+                    Start Session ({selectedWordIds.size})
+                  </button>
+                )}
               </>
             )}
             {selectedWordIds.size > 0 && activeTab === "added_by_others" && (
@@ -986,7 +1159,7 @@ export default function VaultPage() {
                   </tr>
                 </thead>
               <tbody className="divide-y divide-gray-100">
-                {(activeTab === "my_library" || activeTab === "removed") && (activeTab === "my_library" ? displayedLibrary : displayedRemoved).slice(0, visibleCount).map((setting) => {
+                {(activeTab === "my_library" || activeTab === "removed") && (activeTab === "my_library" ? displayedLibrary : displayedRemoved).slice(0, visibleCount).map((setting, index) => {
                   const vocab = setting.words_dim;
                     const isArchived = setting.is_archived;
                     const isFavorite = setting.is_fav;
@@ -998,10 +1171,11 @@ export default function VaultPage() {
                         className={`hover:bg-gray-50 transition ${isArchived ? "opacity-50 bg-gray-50" : ""} ${isSelected ? "bg-blue-50/50" : ""}`}
                       >
                         <td className="px-4 py-3 text-center">
-                          <input 
-                            type="checkbox" 
+                          <input
+                            type="checkbox"
                             checked={isSelected}
-                            onChange={() => toggleSelection(setting.word_id)}
+                            onChange={() => {}}
+                            onClick={(e) => toggleSelection(setting.word_id, index, e.shiftKey)}
                             className="rounded text-blue-600 focus:ring-blue-500 border-gray-300"
                           />
                         </td>
@@ -1076,7 +1250,7 @@ export default function VaultPage() {
                     );
                   })}
 
-                {activeTab === "added_by_others" && displayedOthers.slice(0, visibleCount).map((vocab) => {
+                {activeTab === "added_by_others" && displayedOthers.slice(0, visibleCount).map((vocab, index) => {
                   const isSelected = selectedWordIds.has(vocab.id);
                     return (
                       <tr 
@@ -1087,7 +1261,8 @@ export default function VaultPage() {
                           <input 
                             type="checkbox" 
                             checked={isSelected}
-                            onChange={() => toggleSelection(vocab.id)}
+                            onChange={() => {}}
+                            onClick={(e) => toggleSelection(vocab.id, index, e.shiftKey)}
                             className="rounded text-blue-600 focus:ring-blue-500 border-gray-300"
                           />
                         </td>

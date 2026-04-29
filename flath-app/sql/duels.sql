@@ -8,8 +8,10 @@
 
 -- Enums ---------------------------------------------------------------------
 DO $$ BEGIN
-  CREATE TYPE duel_data_source AS ENUM ('p1', 'p2', 'avg');
+  CREATE TYPE duel_data_source AS ENUM ('p1', 'p2', 'avg', 'random');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- Add 'random' to existing deployments that only had ('p1','p2','avg').
+ALTER TYPE duel_data_source ADD VALUE IF NOT EXISTS 'random';
 
 DO $$ BEGIN
   CREATE TYPE duel_card_mode AS ENUM ('prod', 'rec', 'mixed');
@@ -59,3 +61,7 @@ DROP POLICY IF EXISTS "P1 can insert" ON duels;
 CREATE POLICY "P1 can insert"
   ON duels FOR INSERT
   WITH CHECK (auth.uid() = p1_user_id);
+
+-- Iteration 2: add 'random' data source -----------------------------------
+-- Run this separately if the table already exists from Iteration 1.
+ALTER TYPE duel_data_source ADD VALUE IF NOT EXISTS 'random';
