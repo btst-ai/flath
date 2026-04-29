@@ -64,6 +64,9 @@ export async function fetchUserWords(
           if (filter_criteria.theme) query = query.eq("words_dim.theme", filter_criteria.theme);
           if (filter_criteria.pos) query = query.eq("words_dim.part_of_speech", filter_criteria.pos);
           if (filter_criteria.favOnly) query = query.eq("is_fav", true);
+          if (filter_criteria.excludedIds?.length > 0) {
+            query = query.not("word_id", "in", `(${filter_criteria.excludedIds.join(",")})`);
+          }
         } else {
           const { data: items } = await supabase
             .from("word_pack_items")
