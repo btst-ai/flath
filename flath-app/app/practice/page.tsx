@@ -388,7 +388,7 @@ function PracticeSession() {
       {/* Card + action buttons: on mobile flex-col with 70/30 split */}
       <div className="flex-1 w-full md:max-w-2xl flex flex-col md:items-center md:justify-center md:-mt-12 min-h-0">
         <div
-          className="flex-[6] md:flex-none w-full md:aspect-[4/3] perspective-1000 cursor-pointer min-h-0"
+          className="flex-[5] md:flex-none w-full md:aspect-[4/3] perspective-1000 cursor-pointer min-h-0"
           onClick={() => setFlipped(!flipped)}
         >
           <motion.div
@@ -538,7 +538,7 @@ function PracticeSession() {
         </div>
 
         {/* Action Buttons */}
-        <div className={`flex-[3] md:flex-none md:mt-12 flex items-center justify-center gap-4 transition-all duration-300 ${flipped ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
+        <div className={`flex-[3] md:flex-none md:mt-12 flex items-center justify-center gap-4 transition-all duration-300 ${flipped ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
           <button
             onClick={(e) => { e.stopPropagation(); handleAction("forgot"); }}
             className="flex flex-col items-center justify-center w-24 h-24 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition shadow-sm"
