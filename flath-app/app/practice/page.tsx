@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { motion } from "framer-motion";
-import { Check, X, HelpCircle, ArrowLeft, StopCircle, Star, Archive, Edit2, Copy, Search } from "lucide-react";
+import { Check, X, HelpCircle, StopCircle, Star, Archive, Edit2, Copy, Search } from "lucide-react";
 import { submitSessionAttempts } from "@/app/actions/session";
 import { EditWordModal, getDifficultyFromRank } from "@/components/EditWordModal";
 import {
@@ -321,7 +321,7 @@ function PracticeSession() {
   const diffColor = difficultyColors[difficulty as keyof typeof difficultyColors] || "bg-gray-100 text-gray-700";
 
   return (
-    <main className="min-h-screen flex flex-col items-center p-4 md:p-6">
+    <main className="h-screen md:min-h-screen md:h-auto flex flex-col md:items-center p-3 md:p-6">
       <EditWordModal 
         isOpen={!!editingWord}
         onClose={() => setEditingWord(null)}
@@ -339,27 +339,43 @@ function PracticeSession() {
           setEditingWord(null);
         }}
       />
-      <div className="w-full max-w-2xl flex items-center justify-between gap-2 flex-wrap mb-4 mt-2 md:mb-8 md:mt-4">
-        <button
-          onClick={() => router.push("/")}
-          className="p-2 text-gray-400 hover:text-gray-700 bg-white border border-gray-200 rounded-full shadow-sm transition"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        
-        {/* Stats Bar */}
-        <div className="flex items-center gap-6 bg-white px-6 py-3 rounded-full border border-gray-200 shadow-sm font-semibold text-gray-700">
+      {/* Mobile controls: stats pill + end button stacked */}
+      <div className="md:hidden flex flex-col gap-2 w-full mb-3">
+        <div className="w-full flex items-center justify-center gap-6 bg-white px-6 py-3 rounded-full border border-gray-200 shadow-sm font-semibold text-gray-700">
           <div className="flex items-center gap-2">
             <span className="text-gray-400">⏱</span>
             <span className="w-12 text-center font-mono">{formatTime(elapsedSeconds)}</span>
           </div>
-          <div className="w-px h-4 bg-gray-300"></div>
+          <div className="w-px h-4 bg-gray-300" />
           <div className="flex items-center gap-2">
             <span className="text-gray-400">📈</span>
             <span>{masteredCount} / {totalSessionSize}</span>
           </div>
         </div>
-        
+        <div className="flex justify-center">
+          <button
+            onClick={() => handleEndSession(false)}
+            className="flex items-center gap-2 px-8 py-2.5 bg-white border border-gray-200 shadow-sm text-red-500 hover:bg-red-50 rounded-full transition font-medium text-sm"
+          >
+            <StopCircle className="w-4 h-4" />
+            End practice
+          </button>
+        </div>
+      </div>
+
+      {/* Desktop controls: stats + end side by side, no back arrow */}
+      <div className="hidden md:flex w-full max-w-2xl items-center justify-between gap-2 mb-8 mt-4">
+        <div className="flex items-center gap-6 bg-white px-6 py-3 rounded-full border border-gray-200 shadow-sm font-semibold text-gray-700">
+          <div className="flex items-center gap-2">
+            <span className="text-gray-400">⏱</span>
+            <span className="w-12 text-center font-mono">{formatTime(elapsedSeconds)}</span>
+          </div>
+          <div className="w-px h-4 bg-gray-300" />
+          <div className="flex items-center gap-2">
+            <span className="text-gray-400">📈</span>
+            <span>{masteredCount} / {totalSessionSize}</span>
+          </div>
+        </div>
         <button
           onClick={() => handleEndSession(false)}
           className="flex items-center gap-1 px-4 py-2 bg-white border border-gray-200 shadow-sm text-red-500 hover:bg-red-50 rounded-full transition font-medium text-sm"
@@ -369,10 +385,10 @@ function PracticeSession() {
         </button>
       </div>
 
-      {/* Flashcard Area */}
-      <div className="flex-1 w-full max-w-2xl flex flex-col items-center justify-center md:-mt-12">
+      {/* Card + action buttons: on mobile flex-col with 70/30 split */}
+      <div className="flex-1 w-full md:max-w-2xl flex flex-col md:items-center md:justify-center md:-mt-12 min-h-0">
         <div
-          className="w-full flex-1 md:flex-none md:aspect-[4/3] perspective-1000 cursor-pointer min-h-[60vh] md:min-h-0"
+          className="flex-[7] md:flex-none w-full md:aspect-[4/3] perspective-1000 cursor-pointer min-h-0"
           onClick={() => setFlipped(!flipped)}
         >
           <motion.div
@@ -522,7 +538,7 @@ function PracticeSession() {
         </div>
 
         {/* Action Buttons */}
-        <div className={`mt-12 flex items-center justify-center gap-4 transition-all duration-300 ${flipped ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
+        <div className={`flex-[3] md:flex-none md:mt-12 flex items-center justify-center gap-4 transition-all duration-300 ${flipped ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
           <button
             onClick={(e) => { e.stopPropagation(); handleAction("forgot"); }}
             className="flex flex-col items-center justify-center w-24 h-24 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition shadow-sm"

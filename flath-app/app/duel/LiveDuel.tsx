@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState, type Dispatch } from "react";
-import { motion } from "framer-motion";
 import { StopCircle, Pencil } from "lucide-react";
 import type { DuelState, Claim, Grade, Phase, PlayerId } from "./duelTypes";
 import { currentScores, type DuelAction } from "./duelStateMachine";
@@ -165,15 +164,10 @@ export function LiveDuel({ state, dispatch, onEndSession }: Props) {
           color="blue"
         />
 
-        {/* Center: flashcard */}
-        <div className="w-full aspect-[4/3] perspective-1000">
-          <motion.div
-            className="w-full h-full relative preserve-3d"
-            animate={{ rotateY: flipped ? 180 : 0 }}
-            transition={{ type: "spring", stiffness: 260, damping: 20 }}
-          >
-            {/* Front */}
-            <div className="absolute w-full h-full backface-hidden bg-white rounded-3xl shadow-lg border border-gray-100 flex flex-col items-center justify-center p-8 text-center">
+        {/* Center: flashcard — no flip animation, instant switch */}
+        <div className="w-full aspect-[4/3]">
+          {!flipped ? (
+            <div className="w-full h-full bg-white rounded-3xl shadow-lg border border-gray-100 flex flex-col items-center justify-center p-8 text-center relative">
               <div className="absolute top-6 left-6">
                 <span className="text-xs font-bold uppercase tracking-widest text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
                   Theme: {round.card.words_dim.theme || "None"}
@@ -196,12 +190,8 @@ export function LiveDuel({ state, dispatch, onEndSession }: Props) {
               </h2>
               <p className="text-gray-400 font-medium">{round.card.words_dim.part_of_speech}</p>
             </div>
-
-            {/* Back */}
-            <div
-              className="absolute w-full h-full backface-hidden bg-gray-900 rounded-3xl shadow-xl flex flex-col items-center justify-center p-8 text-center"
-              style={{ transform: "rotateY(180deg)" }}
-            >
+          ) : (
+            <div className="w-full h-full bg-gray-900 rounded-3xl shadow-xl flex flex-col items-center justify-center p-8 text-center relative">
               <div className="absolute top-6 right-6">
                 <button
                   onClick={() => setIsEditing(true)}
@@ -216,7 +206,7 @@ export function LiveDuel({ state, dispatch, onEndSession }: Props) {
                 {translationText}
               </h2>
             </div>
-          </motion.div>
+          )}
         </div>
 
         {/* Right: P2 action panel */}
