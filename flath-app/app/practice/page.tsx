@@ -321,7 +321,7 @@ function PracticeSession() {
   const diffColor = difficultyColors[difficulty as keyof typeof difficultyColors] || "bg-gray-100 text-gray-700";
 
   return (
-    <main className="h-screen md:min-h-screen md:h-auto flex flex-col md:items-center p-3 md:p-6">
+    <main className="h-screen overflow-hidden md:overflow-visible md:min-h-screen md:h-auto flex flex-col md:items-center p-3 md:p-6">
       <EditWordModal 
         isOpen={!!editingWord}
         onClose={() => setEditingWord(null)}
