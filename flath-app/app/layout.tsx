@@ -46,6 +46,7 @@ export default function RootLayout({
           <div
             aria-hidden
             className="fixed inset-0 -z-10 flex items-center justify-center pointer-events-none overflow-hidden bg-gray-50"
+            style={{ willChange: "transform", transform: "translateZ(0)" }}
           >
             {/* Rotated 90° to portrait. Sized so the image's visual width
                 (the source's height after rotation) is ~30% larger than the
