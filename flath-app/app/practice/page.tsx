@@ -328,9 +328,10 @@ function PracticeSession() {
         word={editingWord}
         onSuccess={async () => {
           if (editingWord) {
-            const { data } = await supabase.from('words_dim').select('*').eq('id', editingWord.id).single();
+            const { data, error } = await supabase.from('words_dim').select('*').eq('id', editingWord.id).single();
+            if (error) console.error('[practice] refresh edited word failed', error);
             if (data) {
-              setQueue(prev => prev.map(item => 
+              setQueue(prev => prev.map(item =>
                 item.words_dim.id === data.id ? { ...item, words_dim: data } : item
               ));
             }

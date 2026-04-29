@@ -5,11 +5,16 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { BookOpen, Layers, Folder, Swords } from "lucide-react";
 import { PracticeSelectionModal } from "@/components/PracticeSelectionModal";
+import { useSurface, isMobileSurface } from "@/lib/surface";
 
 export default function Home() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+
+  // Surface gating — see flath-app/CLAUDE.md (Surface model)
+  const surface = useSurface();
+  const showDesktopOnly = !isMobileSurface(surface);
 
   // Modal State
   const [showPracticeModal, setShowPracticeModal] = useState(false);
@@ -71,13 +76,16 @@ export default function Home() {
               <BookOpen className="w-5 h-5" />
               Start Practice Session
             </button>
-            <button
-              onClick={() => router.push("/duel")}
-              className="flex items-center justify-center gap-3 w-full px-6 py-4 bg-red-600 text-white rounded-xl font-semibold text-lg hover:bg-red-700 transition shadow"
-            >
-              <Swords className="w-5 h-5" />
-              Duel
-            </button>
+            {showDesktopOnly && (
+              // Duel is desktop-only — see flath-app/CLAUDE.md
+              <button
+                onClick={() => router.push("/duel")}
+                className="flex items-center justify-center gap-3 w-full px-6 py-4 bg-red-600 text-white rounded-xl font-semibold text-lg hover:bg-red-700 transition shadow"
+              >
+                <Swords className="w-5 h-5" />
+                Duel
+              </button>
+            )}
             <button
               onClick={() => router.push("/packs")}
               className="flex items-center justify-center gap-3 w-full px-6 py-4 bg-white text-gray-800 border-2 border-gray-200 rounded-xl font-semibold text-lg hover:bg-gray-50 hover:border-gray-300 transition"

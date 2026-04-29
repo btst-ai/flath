@@ -81,7 +81,11 @@ export async function fetchUserWords(
   }
 
   const { data, error } = await query;
-  if (error || !data) return [];
+  if (error) {
+    console.error("[sessionQueue] fetchUserWords failed", error);
+    return [];
+  }
+  if (!data) return [];
   return data as UserSetting[];
 }
 

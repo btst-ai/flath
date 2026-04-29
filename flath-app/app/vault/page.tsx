@@ -12,6 +12,7 @@ import { EditWordModal, getDifficultyFromRank } from "@/components/EditWordModal
 import { ImportSummaryModal } from "@/components/ImportSummaryModal";
 import { BatchEditModal } from "@/components/BatchEditModal";
 import { PracticeSelectionModal } from "@/components/PracticeSelectionModal";
+import { useSurface, isMobileSurface } from "@/lib/surface";
 
 interface CsvRow {
   "Greek Word"?: string;
@@ -26,6 +27,11 @@ type SortDirection = "asc" | "desc";
 
 export default function VaultPage() {
   const router = useRouter();
+
+  // Surface gating — CSV import + batch-edit are desktop-only. See flath-app/CLAUDE.md.
+  const surface = useSurface();
+  const showDesktopOnly = !isMobileSurface(surface);
+
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -678,16 +684,18 @@ export default function VaultPage() {
           fetchVocab();
         }}
       />
-      <BatchEditModal
-        isOpen={isBatchEditing}
-        onClose={() => setIsBatchEditing(false)}
-        selectedWordIds={Array.from(selectedWordIds)}
-        onSuccess={() => {
-          setIsBatchEditing(false);
-          setSelectedWordIds(new Set());
-          fetchVocab();
-        }}
-      />
+      {showDesktopOnly && (
+        <BatchEditModal
+          isOpen={isBatchEditing}
+          onClose={() => setIsBatchEditing(false)}
+          selectedWordIds={Array.from(selectedWordIds)}
+          onSuccess={() => {
+            setIsBatchEditing(false);
+            setSelectedWordIds(new Set());
+            fetchVocab();
+          }}
+        />
+      )}
       {importSummary && (
         <ImportSummaryModal 
           isOpen={importSummary.isOpen}
@@ -729,9 +737,10 @@ export default function VaultPage() {
           </div>
         </div>
 
-        {/* Uploader Section */}
+        {/* Uploader Section — desktop-only, see flath-app/CLAUDE.md */}
+        {showDesktopOnly && (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 overflow-hidden">
-          <button 
+          <button
             onClick={() => setShowUploader(!showUploader)}
             className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition"
           >
@@ -805,6 +814,7 @@ export default function VaultPage() {
              </div>
           )}
         </div>
+        )}
 
         {/* Filter Bar */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 mb-6">
@@ -1063,7 +1073,7 @@ export default function VaultPage() {
           </div>
           
           <div className="flex items-center gap-2">
-            {selectedWordIds.size > 0 && (activeTab === "my_library" || activeTab === "removed") && (
+            {showDesktopOnly && selectedWordIds.size > 0 && (activeTab === "my_library" || activeTab === "removed") && (
               <>
                 <button
                   onClick={() => setIsBatchEditing(true)}
@@ -1087,15 +1097,15 @@ export default function VaultPage() {
                 )}
               </>
             )}
-            {selectedWordIds.size > 0 && activeTab === "added_by_others" && (
+            {showDesktopOnly && selectedWordIds.size > 0 && activeTab === "added_by_others" && (
               <>
-                <button 
+                <button
                   onClick={() => setIsBatchEditing(true)}
                   className="px-3 py-1.5 bg-gray-200 text-gray-800 rounded-md text-sm font-medium hover:bg-gray-300 transition shadow"
                 >
                   Batch Edit ({selectedWordIds.size})
                 </button>
-                <button 
+                <button
                   onClick={addSelectedToMyLibrary}
                   className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition"
                 >
@@ -1122,18 +1132,20 @@ export default function VaultPage() {
               <table className="w-full text-left text-sm text-gray-700 relative">
                 <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-medium sticky top-0 z-10 shadow-sm">
                   <tr>
-                    <th className="px-4 py-3 w-12 text-center">
-                      <input 
-                        type="checkbox" 
-                        onChange={toggleAllSelection} 
-                        checked={
-                          (activeTab === "my_library" && displayedLibrary.length > 0 && selectedWordIds.size === displayedLibrary.length) ||
-                          (activeTab === "removed" && displayedRemoved.length > 0 && selectedWordIds.size === displayedRemoved.length) ||
-                          (activeTab === "added_by_others" && displayedOthers.length > 0 && selectedWordIds.size === displayedOthers.length)
-                        }
-                        className="rounded text-blue-600 focus:ring-blue-500 border-gray-300" 
-                      />
-                    </th>
+                    {showDesktopOnly && (
+                      <th className="px-4 py-3 w-12 text-center">
+                        <input
+                          type="checkbox"
+                          onChange={toggleAllSelection}
+                          checked={
+                            (activeTab === "my_library" && displayedLibrary.length > 0 && selectedWordIds.size === displayedLibrary.length) ||
+                            (activeTab === "removed" && displayedRemoved.length > 0 && selectedWordIds.size === displayedRemoved.length) ||
+                            (activeTab === "added_by_others" && displayedOthers.length > 0 && selectedWordIds.size === displayedOthers.length)
+                          }
+                          className="rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                        />
+                      </th>
+                    )}
                     <th className="px-4 py-3 cursor-pointer hover:bg-gray-100" onClick={() => handleSort("greek_text")}>
                       Greek Word <SortIcon field="greek_text" />
                     </th>
@@ -1170,15 +1182,17 @@ export default function VaultPage() {
                         key={setting.word_id} 
                         className={`hover:bg-gray-50 transition ${isArchived ? "opacity-50 bg-gray-50" : ""} ${isSelected ? "bg-blue-50/50" : ""}`}
                       >
-                        <td className="px-4 py-3 text-center">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => {}}
-                            onClick={(e) => toggleSelection(setting.word_id, index, e.shiftKey)}
-                            className="rounded text-blue-600 focus:ring-blue-500 border-gray-300"
-                          />
-                        </td>
+                        {showDesktopOnly && (
+                          <td className="px-4 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              onClick={(e) => toggleSelection(setting.word_id, index, e.shiftKey)}
+                              className="rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                            />
+                          </td>
+                        )}
                         <td className="px-4 py-3 font-medium text-gray-900">{vocab?.greek_text}</td>
                         <td className="px-4 py-3">{vocab?.french_text}</td>
                         <td className="px-4 py-3">
@@ -1257,15 +1271,17 @@ export default function VaultPage() {
                         key={vocab.id} 
                         className={`hover:bg-gray-50 transition ${isSelected ? "bg-blue-50/50" : ""}`}
                       >
-                        <td className="px-4 py-3 text-center">
-                          <input 
-                            type="checkbox" 
-                            checked={isSelected}
-                            onChange={() => {}}
-                            onClick={(e) => toggleSelection(vocab.id, index, e.shiftKey)}
-                            className="rounded text-blue-600 focus:ring-blue-500 border-gray-300"
-                          />
-                        </td>
+                        {showDesktopOnly && (
+                          <td className="px-4 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              onClick={(e) => toggleSelection(vocab.id, index, e.shiftKey)}
+                              className="rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                            />
+                          </td>
+                        )}
                         <td className="px-4 py-3 font-medium text-gray-900">{vocab.greek_text}</td>
                         <td className="px-4 py-3">{vocab.french_text}</td>
                         <td className="px-4 py-3">

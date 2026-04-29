@@ -113,12 +113,14 @@ export default function PacksPage() {
 
     const allPacksRaw = [...autoPacks, ...(data || [])];
     
+    const allWords: any[] = (wordsData as any[]) || [];
+
     const computeStats = (pack: any) => {
-      let matched = [];
+      let matched: any[] = [];
       if (pack.is_auto) {
-        matched = (wordsData || []).filter(w => w.words_dim?.theme === pack.filter_criteria.theme);
+        matched = allWords.filter((w: any) => w.words_dim?.theme === pack.filter_criteria.theme);
       } else if (pack.is_smart) {
-        matched = (wordsData || []).filter(w => {
+        matched = allWords.filter((w: any) => {
           const c = pack.filter_criteria;
           if (c.theme && w.words_dim?.theme !== c.theme) return false;
           if (c.pos && w.words_dim?.part_of_speech !== c.pos) return false;
@@ -128,7 +130,7 @@ export default function PacksPage() {
         });
       } else {
         const packWordIds = new Set((staticItems || []).filter(i => i.pack_id === pack.id).map(i => i.word_id));
-        matched = (wordsData || []).filter(w => packWordIds.has(w.word_id));
+        matched = allWords.filter((w: any) => packWordIds.has(w.word_id));
       }
 
       const numWords = matched.length;
