@@ -388,7 +388,7 @@ function PracticeSession() {
       {/* Card + action buttons: on mobile flex-col with 70/30 split */}
       <div className="flex-1 w-full md:max-w-2xl flex flex-col md:items-center md:justify-center md:-mt-12 min-h-0">
         <div
-          className="flex-[7] md:flex-none w-full md:aspect-[4/3] perspective-1000 cursor-pointer min-h-0"
+          className="flex-[6] md:flex-none w-full md:aspect-[4/3] perspective-1000 cursor-pointer min-h-0"
           onClick={() => setFlipped(!flipped)}
         >
           <motion.div
