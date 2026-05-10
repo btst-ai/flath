@@ -48,7 +48,11 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${greekToMe.variable} ${ac5x5.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col relative bg-gray-50">
-          <div aria-hidden="true" className="flath-bg" />
+          <div
+            aria-hidden="true"
+            className="flath-bg"
+            style={{ backgroundImage: "url('/flath_bckgrng.png')" }}
+          />
           <div className="relative z-10 flex flex-col flex-1">
             <FloatingAddButton />
             {children}

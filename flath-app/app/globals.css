@@ -46,7 +46,6 @@ body {
   width: 100vh;
   height: 100vw;
   transform: translate(-50%, -50%) rotate(-90deg);
-  background-image: url(/flath_bckgrng.png);
   background-size: cover;
   background-position: center;
   opacity: 0.9;
