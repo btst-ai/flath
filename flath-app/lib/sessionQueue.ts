@@ -179,6 +179,44 @@ export async function getMistakesForRepair(
 }
 
 // ---------------------------------------------------------------------------
+// Filter: remove words with >75% success rate in the last 7 days (smart mode).
+// ---------------------------------------------------------------------------
+
+export async function filterMasteredWords(
+  userId: string,
+  words: UserSetting[],
+): Promise<UserSetting[]> {
+  if (words.length === 0) return words;
+
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: attempts, error } = await supabase
+    .from("attempts_history")
+    .select("word_id, outcome")
+    .eq("user_id", userId)
+    .gte("ts", sevenDaysAgo);
+
+  if (error || !attempts || attempts.length === 0) return words;
+
+  // Count total and "know" outcomes per word
+  const totals = new Map<string, number>();
+  const knows = new Map<string, number>();
+  for (const a of attempts) {
+    totals.set(a.word_id, (totals.get(a.word_id) || 0) + 1);
+    if (a.outcome === "know") {
+      knows.set(a.word_id, (knows.get(a.word_id) || 0) + 1);
+    }
+  }
+
+  return words.filter(w => {
+    const total = totals.get(w.word_id);
+    if (!total) return true; // No recent reviews — keep it
+    const successRate = (knows.get(w.word_id) || 0) / total;
+    return successRate <= 0.75;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Shuffle
 // ---------------------------------------------------------------------------
 

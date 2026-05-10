@@ -10,6 +10,7 @@ import { EditWordModal, getDifficultyFromRank } from "@/components/EditWordModal
 import {
   fetchUserWords,
   getMistakesForRepair,
+  filterMasteredWords,
   sortSoloPriority,
   randomShuffle,
   assignTracks,
@@ -104,6 +105,9 @@ function PracticeSession() {
         .filter((w): w is UserSetting => w != null);
     } else if (mode === "random") {
       ordered = randomShuffle(words);
+    } else if (mode === "smart") {
+      const unmastered = await filterMasteredWords(userId, words);
+      ordered = sortSoloPriority(unmastered);
     } else {
       ordered = sortSoloPriority(words);
     }
