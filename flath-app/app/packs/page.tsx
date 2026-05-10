@@ -28,6 +28,11 @@ const getPackColorStyle = (packId: string, avgHeat: number) => {
 
 export default function PacksPage() {
   const router = useRouter();
+
+  useEffect(() => {
+    document.body.classList.add("hide-background");
+    return () => document.body.classList.remove("hide-background");
+  }, []);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   

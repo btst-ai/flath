@@ -28,6 +28,11 @@ type SortDirection = "asc" | "desc";
 export default function VaultPage() {
   const router = useRouter();
 
+  useEffect(() => {
+    document.body.classList.add("hide-background");
+    return () => document.body.classList.remove("hide-background");
+  }, []);
+
   // Surface gating — CSV import + batch-edit are desktop-only. See flath-app/CLAUDE.md.
   const surface = useSurface();
   const showDesktopOnly = !isMobileSurface(surface);

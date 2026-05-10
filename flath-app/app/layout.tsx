@@ -48,8 +48,13 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${greekToMe.variable} ${ac5x5.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col relative bg-gray-50">
-          <FloatingAddButton />
-          {children}
+          <div aria-hidden="true" className="fixed inset-0 pointer-events-none -rotate-90 opacity-90 z-0">
+            <img src="/flath_bckgrng.png" alt="" className="w-full h-full object-cover" />
+          </div>
+          <div className="relative z-10 flex flex-col flex-1">
+            <FloatingAddButton />
+            {children}
+          </div>
           <Toaster richColors position="top-right" />
         </body>
     </html>
