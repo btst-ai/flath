@@ -48,8 +48,8 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${greekToMe.variable} ${ac5x5.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col relative bg-gray-50">
-          <div aria-hidden="true" className="fixed inset-0 pointer-events-none -rotate-90 opacity-90 z-0 overflow-hidden">
-            <img src="/flath_bckgrng.png" alt="" className="w-full h-full object-cover" />
+          <div aria-hidden="true" className="fixed inset-0 pointer-events-none opacity-90 z-0 overflow-hidden -rotate-90 origin-center">
+            <img src="/flath_bckgrng.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
           </div>
           <div className="relative z-10 flex flex-col flex-1">
             <FloatingAddButton />
