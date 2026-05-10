@@ -65,8 +65,8 @@ export function PracticeSelectionModal({ isOpen, onClose, userId }: PracticeSele
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200">
-        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+      <div className="bg-white rounded-2xl max-w-md w-full shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 flex-shrink-0">
           <h2 className="text-xl font-bold text-gray-900">Start Practice</h2>
           <button
             onClick={onClose}
@@ -75,8 +75,8 @@ export function PracticeSelectionModal({ isOpen, onClose, userId }: PracticeSele
             <X className="w-5 h-5" />
           </button>
         </div>
-        
-        <div className="p-6 space-y-6">
+
+        <div className="p-6 space-y-6 overflow-y-auto flex-1">
           {/* Smart Shuffle */}
           <div>
             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Smart Shuffle</h3>
@@ -104,6 +104,39 @@ export function PracticeSelectionModal({ isOpen, onClose, userId }: PracticeSele
               <button
                 onClick={() => router.push(`/practice?mode=smart&limit=${smartLimit}`)}
                 className="w-full py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition"
+              >
+                Start
+              </button>
+            </div>
+          </div>
+
+          {/* Mistakes Repair */}
+          <div>
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Mistakes Repair</h3>
+            <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 font-bold text-orange-700">
+                  <AlertCircle className="w-4 h-4" />
+                  Repair Mistakes
+                </div>
+                <div className="flex gap-1">
+                  {SESSION_SIZES.map(n => (
+                    <button
+                      key={n}
+                      onClick={() => setMistakesLimit(n)}
+                      className={`px-2 py-0.5 rounded text-xs font-semibold border transition ${mistakesLimit === n ? "bg-orange-600 text-white border-orange-600" : "bg-white text-orange-700 border-orange-300 hover:border-orange-500"}`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="text-sm text-orange-600/80 mb-3">
+                Review words marked 'forgot' in the last 7 days that haven't been reviewed today (ordered by mistake count, then by Heat › Success › Frequency).
+              </p>
+              <button
+                onClick={() => router.push(`/practice?mode=mistakes&limit=${mistakesLimit}`)}
+                className="w-full py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold rounded-lg transition"
               >
                 Start
               </button>
@@ -197,39 +230,6 @@ export function PracticeSelectionModal({ isOpen, onClose, userId }: PracticeSele
                 }}
                 disabled={!selectedPackId || isLoadingPacks}
                 className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition"
-              >
-                Start
-              </button>
-            </div>
-          </div>
-
-          {/* Mistakes Repair */}
-          <div>
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Mistakes Repair</h3>
-            <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2 font-bold text-orange-700">
-                  <AlertCircle className="w-4 h-4" />
-                  Repair Mistakes
-                </div>
-                <div className="flex gap-1">
-                  {SESSION_SIZES.map(n => (
-                    <button
-                      key={n}
-                      onClick={() => setMistakesLimit(n)}
-                      className={`px-2 py-0.5 rounded text-xs font-semibold border transition ${mistakesLimit === n ? "bg-orange-600 text-white border-orange-600" : "bg-white text-orange-700 border-orange-300 hover:border-orange-500"}`}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <p className="text-sm text-orange-600/80 mb-3">
-                Review words marked 'forgot' in the last 7 days that haven't been reviewed today (ordered by mistake count, then by Heat › Success › Frequency).
-              </p>
-              <button
-                onClick={() => router.push(`/practice?mode=mistakes&limit=${mistakesLimit}`)}
-                className="w-full py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold rounded-lg transition"
               >
                 Start
               </button>
