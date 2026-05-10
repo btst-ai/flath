@@ -20,6 +20,7 @@ export interface UserSetting {
   interest_score: number;
   avg_success_rate_prod: number;
   avg_success_rate_rec: number;
+  last_reviewed?: string | null;
   words_dim: VocabRecord;
 }
 
@@ -90,6 +91,91 @@ export async function fetchUserWords(
   }
   if (!data) return [];
   return data as UserSetting[];
+}
+
+// ---------------------------------------------------------------------------
+// Fetch: words from mistakes in last 7 days, not reviewed today.
+// ---------------------------------------------------------------------------
+
+export async function getMistakesForRepair(
+  userId: string,
+  limit: number,
+): Promise<UserSetting[]> {
+  // Get mistakes from last 7 days
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  // Query: get all "forgot" attempts in last 7 days, group by word_id, count them
+  const { data: mistakeAttempts, error } = await supabase
+    .from("attempts_history")
+    .select("word_id")
+    .eq("user_id", userId)
+    .eq("outcome", "forgot")
+    .gte("ts", sevenDaysAgo);
+
+  if (error) {
+    console.error("[sessionQueue] getMistakesForRepair failed", error);
+    return [];
+  }
+
+  if (!mistakeAttempts || mistakeAttempts.length === 0) {
+    return [];
+  }
+
+  // Count "forgot" occurrences per word_id
+  const mistakeCounts = new Map<string, number>();
+  for (const attempt of mistakeAttempts) {
+    const count = mistakeCounts.get(attempt.word_id) || 0;
+    mistakeCounts.set(attempt.word_id, count + 1);
+  }
+
+  const wordIds = Array.from(mistakeCounts.keys());
+
+  // Fetch user_word_settings for these words, filter by last_reviewed
+  const { data: userSettings, error: settingsError } = await supabase
+    .from("user_word_settings")
+    .select(`
+      *,
+      words_dim!inner (*)
+    `)
+    .eq("user_id", userId)
+    .in("word_id", wordIds)
+    .eq("is_archived", false);
+
+  if (settingsError) {
+    console.error("[sessionQueue] getMistakesForRepair user_settings query failed", settingsError);
+    return [];
+  }
+
+  if (!userSettings) {
+    return [];
+  }
+
+  // Filter: only include words NOT reviewed in last 24 hours
+  const filtered = userSettings.filter((word: UserSetting) => {
+    if (!word.last_reviewed) return true; // Never reviewed, include it
+    const lastReviewedTime = new Date(word.last_reviewed).getTime();
+    const twentyFourHoursAgoTime = new Date(twentyFourHoursAgo).getTime();
+    return lastReviewedTime < twentyFourHoursAgoTime;
+  });
+
+  // Sort by: mistake count DESC, then apply sortSoloPriority for secondary sort
+  const sorted = filtered.sort((a: UserSetting, b: UserSetting) => {
+    const countA = mistakeCounts.get(a.word_id) || 0;
+    const countB = mistakeCounts.get(b.word_id) || 0;
+    if (countA !== countB) return countB - countA; // More mistakes first
+
+    // Secondary sort: use sortSoloPriority logic (Heat, Success, Frequency)
+    if (a.interest_score !== b.interest_score) return b.interest_score - a.interest_score;
+    const successA = (a.avg_success_rate_prod + a.avg_success_rate_rec) / 2;
+    const successB = (b.avg_success_rate_prod + b.avg_success_rate_rec) / 2;
+    if (successA !== successB) return successA - successB;
+    const freqA = a.words_dim.frequency_rank > 0 ? a.words_dim.frequency_rank : 99999;
+    const freqB = b.words_dim.frequency_rank > 0 ? b.words_dim.frequency_rank : 99999;
+    return freqA - freqB;
+  });
+
+  return sorted.slice(0, limit) as UserSetting[];
 }
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { X, Play, Shuffle } from "lucide-react";
+import { X, Play, Shuffle, AlertCircle } from "lucide-react";
 
 const SESSION_SIZES = [10, 25, 50] as const;
 type SessionSize = typeof SESSION_SIZES[number];
@@ -18,6 +18,9 @@ export function PracticeSelectionModal({ isOpen, onClose, userId }: PracticeSele
   const [isLoadingPacks, setIsLoadingPacks] = useState(false);
   const [smartLimit, setSmartLimit] = useState<SessionSize>(25);
   const [randomLimit, setRandomLimit] = useState<SessionSize>(25);
+  const [packLimit, setPackLimit] = useState<SessionSize>(25);
+  const [mistakesLimit, setMistakesLimit] = useState<SessionSize>(25);
+  const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen && userId) {
@@ -140,33 +143,97 @@ export function PracticeSelectionModal({ isOpen, onClose, userId }: PracticeSele
             </div>
           </div>
 
-          {/* Choice A: Select Word Pack */}
+          {/* Practice a word pack */}
           <div>
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Choice A: Select Pack</h3>
-            {isLoadingPacks ? (
-              <div className="py-8 flex justify-center">
-                <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Practice a Word Pack</h3>
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2 font-bold text-blue-700">
+                  <Play className="w-4 h-4" />
+                  Select Pack
+                </div>
+                <div className="flex gap-1">
+                  {SESSION_SIZES.map(n => (
+                    <button
+                      key={n}
+                      onClick={() => setPackLimit(n)}
+                      className={`px-2 py-0.5 rounded text-xs font-semibold border transition ${packLimit === n ? "bg-blue-600 text-white border-blue-600" : "bg-white text-blue-700 border-blue-300 hover:border-blue-500"}`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
               </div>
-            ) : packs.length === 0 ? (
-              <div className="text-sm text-gray-500 text-center py-4 border border-dashed rounded-xl">
-                No packs found. Create one in the Vault.
+              {isLoadingPacks ? (
+                <div className="py-4 flex justify-center">
+                  <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : packs.length === 0 ? (
+                <div className="text-sm text-blue-600/70 py-2">
+                  No packs found. Create one in the Vault.
+                </div>
+              ) : (
+                <select
+                  value={selectedPackId || ""}
+                  onChange={(e) => setSelectedPackId(e.target.value)}
+                  className="w-full px-3 py-2 border border-blue-300 rounded-lg bg-white text-gray-800 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select a word pack...</option>
+                  {packs.map(pack => (
+                    <option key={pack.id} value={pack.id}>
+                      {pack.name} {pack.is_smart ? "(Smart)" : "(Static)"}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <p className="text-sm text-blue-600/80 mt-3 mb-3">
+                {packLimit} words from your selected pack (ordered by priority: Heat › Success › Frequency).
+              </p>
+              <button
+                onClick={() => {
+                  if (selectedPackId) {
+                    router.push(`/practice?pack_id=${selectedPackId}&limit=${packLimit}`);
+                  }
+                }}
+                disabled={!selectedPackId || isLoadingPacks}
+                className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition"
+              >
+                Start
+              </button>
+            </div>
+          </div>
+
+          {/* Mistakes Repair */}
+          <div>
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Mistakes Repair</h3>
+            <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 font-bold text-orange-700">
+                  <AlertCircle className="w-4 h-4" />
+                  Repair Mistakes
+                </div>
+                <div className="flex gap-1">
+                  {SESSION_SIZES.map(n => (
+                    <button
+                      key={n}
+                      onClick={() => setMistakesLimit(n)}
+                      className={`px-2 py-0.5 rounded text-xs font-semibold border transition ${mistakesLimit === n ? "bg-orange-600 text-white border-orange-600" : "bg-white text-orange-700 border-orange-300 hover:border-orange-500"}`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
               </div>
-            ) : (
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                {packs.map(pack => (
-                  <button
-                    key={pack.id}
-                    onClick={() => router.push(`/practice?pack_id=${pack.id}`)}
-                    className="w-full flex items-center justify-between p-3 bg-white border border-gray-200 rounded-xl hover:bg-blue-50 hover:border-blue-200 transition text-left"
-                  >
-                    <span className="font-semibold text-gray-800">{pack.name}</span>
-                    <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full font-medium">
-                      {pack.is_smart ? "Smart" : "Static"}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
+              <p className="text-sm text-orange-600/80 mb-3">
+                Review words marked 'forgot' in the last 7 days that haven't been reviewed today (ordered by mistake count, then by Heat › Success › Frequency).
+              </p>
+              <button
+                onClick={() => router.push(`/practice?mode=mistakes&limit=${mistakesLimit}`)}
+                className="w-full py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold rounded-lg transition"
+              >
+                Start
+              </button>
+            </div>
           </div>
         </div>
       </div>

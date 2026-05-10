@@ -9,6 +9,7 @@ import { submitSessionAttempts } from "@/app/actions/session";
 import { EditWordModal, getDifficultyFromRank } from "@/components/EditWordModal";
 import {
   fetchUserWords,
+  getMistakesForRepair,
   sortSoloPriority,
   randomShuffle,
   assignTracks,
@@ -44,8 +45,10 @@ function PracticeSession() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [currentInterestToggle, setCurrentInterestToggle] = useState<string>("none");
   const [editingWord, setEditingWord] = useState<any | null>(null);
+  const [skippedCards, setSkippedCards] = useState<Set<string>>(new Set());
+  const [isReviewingSkippedCard, setIsReviewingSkippedCard] = useState(false);
 
-  const handleInterest = async (e: React.MouseEvent, interaction: "fav" | "up" | "none" | "down" | "archive") => {
+  const handleInterest = async (e: React.MouseEvent, interaction: "fav" | "up" | "down" | "archive") => {
     e.stopPropagation();
     if (queue.length === 0 || !userId) return;
 
@@ -62,22 +65,13 @@ function PracticeSession() {
     }
 
     if (interaction === "down") {
-      setAttempts(prev => [...prev, {
-        word_id: currentWord.word_id,
-        mode: currentWord.track,
-        outcome: "know",
-        interest_interaction: "down",
-      }]);
-      setFlipped(false);
-      setCurrentInterestToggle("none");
-      setTimeout(() => {
-        setQueue(prev => {
-          const next = prev.slice(1);
-          if (next.length === 0) handleEndSession(true);
-          return next;
-        });
-        setMasteredCount(c => c + 1);
-      }, 150);
+      // "Show less": Mark as skipped, but force review first
+      setIsReviewingSkippedCard(true);
+      // Keep the card flipped status as is to show the answer
+      // User must now click know/meh/forgot to record response, then it will be skipped
+    } else if (interaction === "up") {
+      // "Show more" (Boost): just update interest toggle, no action needed
+      // Boost behavior is preserved - card goes to back of queue with higher priority
     }
   };
 
@@ -85,7 +79,12 @@ function PracticeSession() {
     if (!userId) return;
     setIsLoading(true);
 
-    const words = await fetchUserWords(userId, packId, wordIds);
+    let words;
+    if (mode === "mistakes") {
+      words = await getMistakesForRepair(userId, limit);
+    } else {
+      words = await fetchUserWords(userId, packId, wordIds);
+    }
 
     const ordered = mode === "random" ? randomShuffle(words) : sortSoloPriority(words);
     const sessionWords = assignTracks(ordered.slice(0, limit), "mixed");
@@ -132,7 +131,7 @@ function PracticeSession() {
   const handleAction = async (outcome: "know" | "meh" | "forgot") => {
     if (queue.length === 0) return;
     const currentWord = queue[0];
-    
+
     // Log attempt
     setAttempts(prev => [...prev, {
       word_id: currentWord.word_id,
@@ -143,8 +142,22 @@ function PracticeSession() {
 
     setFlipped(false);
     setCurrentInterestToggle("none");
-    
-    if (outcome === "know") {
+
+    // If this was a "Show less" review, add to skipped set after response is recorded
+    if (isReviewingSkippedCard) {
+      setSkippedCards(prev => new Set([...prev, currentWord.word_id]));
+      setIsReviewingSkippedCard(false);
+      // Always skip to next card (don't put skipped card back in queue)
+      setTimeout(() => {
+        setQueue(prev => {
+          const next = prev.slice(1);
+          if (queue.length === 1) {
+            handleEndSession(true);
+          }
+          return next;
+        });
+      }, 150);
+    } else if (outcome === "know") {
       // Remove from queue
       setTimeout(() => {
         setQueue(prev => prev.slice(1));
@@ -154,11 +167,13 @@ function PracticeSession() {
         }
       }, 150);
     } else {
-      // Move to back
+      // Move to back, but skip if in skipped set
       setTimeout(() => {
         setQueue(prev => {
           const rest = prev.slice(1);
-          return [...rest, currentWord];
+          // Filter out skipped cards when putting back
+          const filtered = rest.filter(w => !skippedCards.has(w.word_id));
+          return filtered.length > 0 ? [...filtered, currentWord] : filtered;
         });
       }, 150);
     }
@@ -507,22 +522,22 @@ function PracticeSession() {
                 <div className="flex gap-2">
                   <button
                     onClick={(e) => handleInterest(e, "down")}
-                    className={`px-4 py-2 rounded-full text-sm font-bold transition-colors ${currentInterestToggle === "down" ? "bg-red-500/20 text-red-400" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
-                    title="Drop from this session"
+                    className={`px-4 py-2 rounded-full text-sm font-bold transition-colors ${isReviewingSkippedCard ? "bg-red-500/20 text-red-400" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+                    title="Review once and skip from remaining loops"
                   >
-                    Drop
+                    Show less
                   </button>
-                  <button
-                    onClick={(e) => handleInterest(e, "none")}
-                    className={`px-4 py-2 rounded-full text-sm font-bold transition-colors ${currentInterestToggle === "none" ? "bg-gray-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+                  <div
+                    className="px-4 py-2 rounded-full text-sm font-bold bg-gray-800 text-gray-400 flex items-center justify-center cursor-default"
+                    title="Interest score (Heat)"
                   >
-                    Neutral
-                  </button>
+                    🔥 {Math.round(queue[0]?.interest_score || 0)}
+                  </div>
                   <button
                     onClick={(e) => handleInterest(e, "up")}
                     className={`px-4 py-2 rounded-full text-sm font-bold transition-colors ${currentInterestToggle === "up" ? "bg-green-500/20 text-green-400" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
                   >
-                    Boost
+                    Show more
                   </button>
                 </div>
                 <button
