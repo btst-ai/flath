@@ -47,21 +47,7 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${greekToMe.variable} ${ac5x5.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col relative">
-          <div
-            aria-hidden
-            className="absolute inset-0 -z-10 flex items-center justify-center pointer-events-none overflow-hidden bg-gray-50"
-          >
-            {/* Rotated 90° to portrait. Sized so the image's visual width
-                (the source's height after rotation) is ~30% larger than the
-                white max-w-2xl card on desktop, and scales with viewport on mobile. */}
-            <img
-              src="/flath_bckgrng.png"
-              alt=""
-              className="rotate-90 origin-center max-w-none opacity-90"
-              style={{ height: "min(130vw, 875px)", width: "auto" }}
-            />
-          </div>
+      <body className="min-h-full flex flex-col relative bg-gray-50">
           <FloatingAddButton />
           {children}
           <Toaster richColors position="top-right" />
