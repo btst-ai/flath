@@ -14,6 +14,7 @@ import {
   randomShuffle,
   assignTracks,
   type SessionWord,
+  type UserSetting,
 } from "@/lib/sessionQueue";
 
 function PracticeSession() {
@@ -21,9 +22,12 @@ function PracticeSession() {
   const searchParams = useSearchParams();
   const packId = searchParams.get("pack_id");
   const wordIdsParam = searchParams.get("word_ids");
-  const wordIds = wordIdsParam ? wordIdsParam.split(",") : null;
+  const wordIds = wordIdsParam ? wordIdsParam.split(",").filter(Boolean) : null;
   const mode = searchParams.get("mode");
   const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "25", 10)));
+  const preserveOrder =
+    searchParams.get("preserve_order") === "1" ||
+    searchParams.get("preserve_order") === "true";
   
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
@@ -83,10 +87,27 @@ function PracticeSession() {
     if (mode === "mistakes") {
       words = await getMistakesForRepair(userId, limit);
     } else {
-      words = await fetchUserWords(userId, packId, wordIds);
+      const idsFromParam = wordIdsParam ? wordIdsParam.split(",").filter(Boolean) : [];
+      words = await fetchUserWords(
+        userId,
+        packId,
+        idsFromParam.length > 0 ? idsFromParam : wordIds,
+      );
     }
 
-    const ordered = mode === "random" ? randomShuffle(words) : sortSoloPriority(words);
+    let ordered: UserSetting[];
+    const idsFromParam = wordIdsParam ? wordIdsParam.split(",").filter(Boolean) : [];
+    if (preserveOrder && idsFromParam.length > 0) {
+      const byId = new Map(words.map((w) => [w.word_id, w]));
+      ordered = idsFromParam
+        .map((id) => byId.get(id))
+        .filter((w): w is UserSetting => w != null);
+    } else if (mode === "random") {
+      ordered = randomShuffle(words);
+    } else {
+      ordered = sortSoloPriority(words);
+    }
+
     const sessionWords = assignTracks(ordered.slice(0, limit), "mixed");
 
     setQueue(sessionWords);
@@ -94,7 +115,7 @@ function PracticeSession() {
     setTotalSessionSize(sessionWords.length);
     setMasteredCount(0);
     setIsLoading(false);
-  }, [userId, packId, wordIdsParam, mode, limit]);
+  }, [userId, packId, wordIdsParam, mode, limit, preserveOrder]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data, error }) => {

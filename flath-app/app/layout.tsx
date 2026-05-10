@@ -20,6 +20,11 @@ const greekToMe = localFont({
   variable: "--font-greek-to-me",
 });
 
+const ac5x5 = localFont({
+  src: "../public/font/AC-5x5_unicode.ttf",
+  variable: "--font-ac5x5",
+});
+
 export const metadata: Metadata = {
   title: "Flath",
   description: "Greek Lexical Engine — vocabulary mastery for B1 Modern Greek learners.",
@@ -40,7 +45,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${greekToMe.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${greekToMe.variable} ${ac5x5.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col relative">
           <div

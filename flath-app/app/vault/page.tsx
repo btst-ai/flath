@@ -679,6 +679,20 @@ export default function VaultPage() {
     toast.success(`Ready to create pack with ${selectedWordIds.size} words! (Implementation pending)`);
   };
 
+  const startReviewTopDisplayed = () => {
+    const ids = displayedLibrary.slice(0, 20).map((w) => w.word_id);
+    if (ids.length === 0) {
+      toast.error("No words to review with the current filters.");
+      return;
+    }
+    const qs = new URLSearchParams({
+      word_ids: ids.join(","),
+      limit: "20",
+      preserve_order: "1",
+    });
+    router.push(`/practice?${qs.toString()}`);
+  };
+
   if (isAuthChecking) {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -736,14 +750,26 @@ export default function VaultPage() {
               Manage your Greek vocabulary, view stats, and import words.
             </p>
           </div>
-          <div className="flex gap-4">
+          <div className="flex gap-4 flex-wrap justify-end">
+            {activeTab === "my_library" && (
+              <button
+                type="button"
+                onClick={startReviewTopDisplayed}
+                disabled={displayedLibrary.length === 0 || isLoadingVocab}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold shadow hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Review this
+              </button>
+            )}
             <button
+              type="button"
               onClick={() => setShowPracticeModal(true)}
               className="px-4 py-2 bg-green-600 text-white rounded-lg font-semibold shadow hover:bg-green-700 transition"
             >
-              Practice Now
+              Practice Selected
             </button>
             <button
+              type="button"
               onClick={() => router.push("/")}
               className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition"
             >
