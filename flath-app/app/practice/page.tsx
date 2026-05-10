@@ -29,6 +29,9 @@ function PracticeSession() {
   const preserveOrder =
     searchParams.get("preserve_order") === "1" ||
     searchParams.get("preserve_order") === "true";
+  const excludeSuccessful =
+    searchParams.get("exclude_successful") === "1" ||
+    searchParams.get("exclude_successful") === "true";
   
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
@@ -96,20 +99,25 @@ function PracticeSession() {
       );
     }
 
+    // Apply exclude_successful filter if enabled (all modes)
+    let filteredWords = words;
+    if (excludeSuccessful) {
+      filteredWords = await filterMasteredWords(userId, words);
+    }
+
     let ordered: UserSetting[];
     const idsFromParam = wordIdsParam ? wordIdsParam.split(",").filter(Boolean) : [];
     if (preserveOrder && idsFromParam.length > 0) {
-      const byId = new Map(words.map((w) => [w.word_id, w]));
+      const byId = new Map(filteredWords.map((w) => [w.word_id, w]));
       ordered = idsFromParam
         .map((id) => byId.get(id))
         .filter((w): w is UserSetting => w != null);
     } else if (mode === "random") {
-      ordered = randomShuffle(words);
+      ordered = randomShuffle(filteredWords);
     } else if (mode === "smart") {
-      const unmastered = await filterMasteredWords(userId, words);
-      ordered = sortSoloPriority(unmastered);
+      ordered = sortSoloPriority(filteredWords);
     } else {
-      ordered = sortSoloPriority(words);
+      ordered = sortSoloPriority(filteredWords);
     }
 
     const sessionWords = assignTracks(ordered.slice(0, limit), "mixed");
