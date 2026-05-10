@@ -88,7 +88,7 @@ export function PracticeSelectionModal({ isOpen, onClose, userId }: PracticeSele
               className="w-4 h-4 rounded border-gray-300 text-gray-600 cursor-pointer"
             />
             <label htmlFor="exclude-successful" className="text-sm font-medium text-gray-700 cursor-pointer">
-              Exclude successful (>75% in last 7 days)
+              Exclude successful (&gt;75% in last 7 days)
             </label>
           </div>
 
