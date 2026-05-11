@@ -28,6 +28,9 @@ const ac5x5 = localFont({
 export const metadata: Metadata = {
   title: "Flath",
   description: "Greek Lexical Engine — vocabulary mastery for B1 Modern Greek learners.",
+  icons: {
+    icon: "/favicon.ico",
+  },
   appleWebApp: { capable: true, title: "Flath", statusBarStyle: "default" },
 };
 
