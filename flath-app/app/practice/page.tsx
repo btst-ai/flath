@@ -206,7 +206,11 @@ function PracticeSession() {
           const rest = prev.slice(1);
           // Filter out skipped cards when putting back
           const filtered = rest.filter(w => !skippedCards.has(w.word_id));
-          return filtered.length > 0 ? [...filtered, currentWord] : filtered;
+          const newQueue = filtered.length > 0 ? [...filtered, currentWord] : [currentWord];
+          if (newQueue.length === 0) {
+            handleEndSession(true);
+          }
+          return newQueue;
         });
       }, 150);
     }
