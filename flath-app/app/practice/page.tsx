@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { motion } from "framer-motion";
 import { Check, X, HelpCircle, StopCircle, Star, Archive, Edit2, Copy, Search } from "lucide-react";
-import { submitSessionAttempts } from "@/app/actions/session";
+import { submitSessionAttempts, getLastAttemptOutcomes } from "@/app/actions/session";
 import { EditWordModal, getDifficultyFromRank } from "@/components/EditWordModal";
 import {
   fetchUserWords,
@@ -32,6 +32,9 @@ function PracticeSession() {
   const excludeSuccessful =
     searchParams.get("exclude_successful") === "1" ||
     searchParams.get("exclude_successful") === "true";
+  const excludeReviewedToday =
+    searchParams.get("exclude_today") === "1" ||
+    searchParams.get("exclude_today") === "true";
   
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
@@ -56,9 +59,31 @@ function PracticeSession() {
   const [skippedCards, setSkippedCards] = useState<Set<string>>(new Set());
   const [isReviewingSkippedCard, setIsReviewingSkippedCard] = useState(false);
 
+  // Phase 3: progress tracking
+  const [seenWordIds, setSeenWordIds] = useState<Set<string>>(new Set());
+  const [iteration, setIteration] = useState(1);
+  const [passStartIds, setPassStartIds] = useState<string[]>([]);
+  const [firstAttemptOutcome, setFirstAttemptOutcome] = useState<Record<string, "know" | "meh" | "forgot">>({});
+  const [sessionStartTs, setSessionStartTs] = useState<string>("");
+
+  // Phase 3: 5s retention intercept after a miss
+  const [isLockedUntil, setIsLockedUntil] = useState<number>(0);
+  const [nowTick, setNowTick] = useState<number>(0);
+  const isLocked = nowTick < isLockedUntil;
+
+  // Phase 3: prior-attempt outcomes for the recap 🎉 marker
+  const [priorOutcomes, setPriorOutcomes] = useState<Record<string, "know" | "meh" | "forgot">>({});
+
+  useEffect(() => {
+    if (isLockedUntil === 0) return;
+    const id = setInterval(() => setNowTick(Date.now()), 200);
+    return () => clearInterval(id);
+  }, [isLockedUntil]);
+
   const handleInterest = async (e: React.MouseEvent, interaction: "fav" | "up" | "down" | "archive") => {
     e.stopPropagation();
     if (queue.length === 0 || !userId) return;
+    if (isLocked) return;
 
     setCurrentInterestToggle(interaction);
     const currentWord = queue[0];
@@ -105,6 +130,15 @@ function PracticeSession() {
       filteredWords = await filterMasteredWords(userId, words);
     }
 
+    // Apply exclude_today filter (current calendar date)
+    if (excludeReviewedToday) {
+      const today = new Date().toDateString();
+      filteredWords = filteredWords.filter(w => {
+        if (!w.last_reviewed) return true;
+        return new Date(w.last_reviewed).toDateString() !== today;
+      });
+    }
+
     let ordered: UserSetting[];
     const idsFromParam = wordIdsParam ? wordIdsParam.split(",").filter(Boolean) : [];
     if (preserveOrder && idsFromParam.length > 0) {
@@ -126,8 +160,13 @@ function PracticeSession() {
     setSessionWords(sessionWords);
     setTotalSessionSize(sessionWords.length);
     setMasteredCount(0);
+    setSeenWordIds(new Set());
+    setIteration(1);
+    setPassStartIds(sessionWords.map(w => w.word_id));
+    setFirstAttemptOutcome({});
+    setSessionStartTs(new Date().toISOString());
     setIsLoading(false);
-  }, [userId, packId, wordIdsParam, mode, limit, preserveOrder]);
+  }, [userId, packId, wordIdsParam, mode, limit, preserveOrder, excludeSuccessful, excludeReviewedToday, wordIds]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data, error }) => {
@@ -163,6 +202,7 @@ function PracticeSession() {
 
   const handleAction = async (outcome: "know" | "meh" | "forgot") => {
     if (queue.length === 0) return;
+    if (isLocked) return;
     const currentWord = queue[0];
 
     // Log attempt
@@ -173,14 +213,41 @@ function PracticeSession() {
       interest_interaction: currentInterestToggle
     }]);
 
-    setFlipped(false);
+    // Track first-attempt outcome per word this session
+    setFirstAttemptOutcome(prev => prev[currentWord.word_id] ? prev : { ...prev, [currentWord.word_id]: outcome });
+    setSeenWordIds(prev => prev.has(currentWord.word_id) ? prev : new Set(prev).add(currentWord.word_id));
+
     setCurrentInterestToggle("none");
+
+    const advanceMissQueue = () => {
+      setQueue(prev => {
+        const rest = prev.slice(1);
+        const filtered = rest.filter(w => !skippedCards.has(w.word_id));
+        const newQueue = filtered.length > 0 ? [...filtered, currentWord] : [currentWord];
+        // Iteration tracking: if the card we just answered was the last of the
+        // current pass, the new queue IS the next pass.
+        setPassStartIds(passIds => {
+          if (passIds.length === 0) return newQueue.map(w => w.word_id);
+          const isLastOfPass = passIds[passIds.length - 1] === currentWord.word_id;
+          if (isLastOfPass) {
+            setIteration(i => i + 1);
+            return newQueue.map(w => w.word_id);
+          }
+          return passIds;
+        });
+        if (newQueue.length === 0) {
+          handleEndSession(true);
+        }
+        return newQueue;
+      });
+    };
 
     // If this was a "Show less" review, add to skipped set after response is recorded
     if (isReviewingSkippedCard) {
       setSkippedCards(prev => new Set([...prev, currentWord.word_id]));
       setIsReviewingSkippedCard(false);
       // Always skip to next card (don't put skipped card back in queue)
+      setFlipped(false);
       setTimeout(() => {
         setQueue(prev => {
           const next = prev.slice(1);
@@ -191,28 +258,35 @@ function PracticeSession() {
         });
       }, 150);
     } else if (outcome === "know") {
+      setFlipped(false);
       // Remove from queue
       setTimeout(() => {
         setQueue(prev => prev.slice(1));
         setMasteredCount(c => c + 1);
+        // Iteration: if we just removed the last id of the current pass, bump
+        setPassStartIds(passIds => {
+          if (passIds.length === 0) return passIds;
+          const isLastOfPass = passIds[passIds.length - 1] === currentWord.word_id;
+          if (isLastOfPass) {
+            setIteration(i => i + 1);
+            // The next pass is whatever remains
+            return queue.slice(1).map(w => w.word_id);
+          }
+          return passIds;
+        });
         if (queue.length === 1) {
           handleEndSession(true); // Last item was popped
         }
       }, 150);
     } else {
-      // Move to back, but skip if in skipped set
+      // Miss path: 5-second retention intercept. Keep card flipped, lock buttons.
+      setIsLockedUntil(Date.now() + 5000);
+      setNowTick(Date.now());
       setTimeout(() => {
-        setQueue(prev => {
-          const rest = prev.slice(1);
-          // Filter out skipped cards when putting back
-          const filtered = rest.filter(w => !skippedCards.has(w.word_id));
-          const newQueue = filtered.length > 0 ? [...filtered, currentWord] : [currentWord];
-          if (newQueue.length === 0) {
-            handleEndSession(true);
-          }
-          return newQueue;
-        });
-      }, 150);
+        setFlipped(false);
+        advanceMissQueue();
+        setIsLockedUntil(0);
+      }, 5000);
     }
   };
 
@@ -221,7 +295,23 @@ function PracticeSession() {
     if (!finishedNormally) {
       // Manual end
     }
-    
+
+    // Fetch prior-attempt outcomes BEFORE inserting this session's attempts,
+    // so the lookup window cleanly excludes them. sessionStartTs was captured
+    // before any cards were shown.
+    if (userId && sessionStartTs && sessionWords.length > 0) {
+      try {
+        const map = await getLastAttemptOutcomes(
+          userId,
+          sessionWords.map(w => w.word_id),
+          sessionStartTs,
+        );
+        setPriorOutcomes(map);
+      } catch (e) {
+        console.error("[practice] getLastAttemptOutcomes failed", e);
+      }
+    }
+
     if (attempts.length > 0 && userId) {
       setIsSaving(true);
       await submitSessionAttempts(userId, attempts);
@@ -309,7 +399,13 @@ function PracticeSession() {
               <span className="text-xs text-gray-400">{recapRows.length} words · sorted by mistakes</span>
             </div>
             <div className="divide-y divide-gray-100">
-              {recapRows.map(({ sw, stats }) => (
+              {recapRows.map(({ sw, stats }) => {
+                const firstOutcome = firstAttemptOutcome[sw.word_id];
+                const historicalAvg = (sw.avg_success_rate_prod + sw.avg_success_rate_rec) / 2;
+                const priorWasForgot = priorOutcomes[sw.word_id] === "forgot";
+                const qualifiesForCelebration =
+                  firstOutcome === "know" && (historicalAvg < 40 || priorWasForgot);
+                return (
                 <div key={sw.word_id} className="flex items-center px-5 py-3 hover:bg-gray-50 transition gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -322,6 +418,7 @@ function PracticeSession() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0 text-xs font-semibold">
+                    {qualifiesForCelebration && <span className="text-base" title="Hard-won win!">🎉</span>}
                     {stats.forgot > 0 && <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded-full">✗ {stats.forgot}</span>}
                     {stats.meh > 0 && <span className="px-2 py-0.5 bg-yellow-100 text-yellow-600 rounded-full">? {stats.meh}</span>}
                     {stats.know > 0 && <span className="px-2 py-0.5 bg-green-100 text-green-600 rounded-full">✓ {stats.know}</span>}
@@ -334,7 +431,8 @@ function PracticeSession() {
                     <Edit2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -372,6 +470,29 @@ function PracticeSession() {
   };
   const diffColor = difficultyColors[difficulty as keyof typeof difficultyColors] || "bg-gray-100 text-gray-700";
 
+  const knownCount = masteredCount;
+  const notSeenCount = Math.max(0, totalSessionSize - seenWordIds.size - knownCount);
+  const retryCount = Math.max(0, queue.length - (notSeenCount));
+
+  const progressPill = (
+    <div className="flex items-center gap-3">
+      <span className="flex items-center gap-1">
+        <span className="font-bold text-green-600">K</span>
+        <span className="font-mono">{knownCount}</span>
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="font-bold text-gray-400">N</span>
+        <span className="font-mono">{notSeenCount}</span>
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="font-bold text-red-600">R</span>
+        <span className="font-mono">{retryCount}</span>
+      </span>
+      <span className="w-px h-4 bg-gray-300" />
+      <span className="text-xs uppercase tracking-wide text-gray-500">Review #{iteration}</span>
+    </div>
+  );
+
   return (
     <main className="h-screen overflow-hidden md:overflow-visible md:min-h-screen md:h-auto flex flex-col md:items-center p-3 md:p-6">
       <EditWordModal 
@@ -393,16 +514,13 @@ function PracticeSession() {
       />
       {/* Mobile controls: stats pill + end button stacked */}
       <div className="md:hidden flex flex-col gap-2 w-full mb-3">
-        <div className="w-full flex items-center justify-center gap-6 bg-white px-6 py-3 rounded-full border border-gray-200 shadow-sm font-semibold text-gray-700">
+        <div className="w-full flex items-center justify-center gap-4 bg-white px-4 py-3 rounded-full border border-gray-200 shadow-sm font-semibold text-gray-700">
           <div className="flex items-center gap-2">
             <span className="text-gray-400">⏱</span>
             <span className="w-12 text-center font-mono">{formatTime(elapsedSeconds)}</span>
           </div>
           <div className="w-px h-4 bg-gray-300" />
-          <div className="flex items-center gap-2">
-            <span className="text-gray-400">📈</span>
-            <span>{masteredCount} / {totalSessionSize}</span>
-          </div>
+          {progressPill}
         </div>
         <div className="flex justify-center">
           <button
@@ -423,10 +541,7 @@ function PracticeSession() {
             <span className="w-12 text-center font-mono">{formatTime(elapsedSeconds)}</span>
           </div>
           <div className="w-px h-4 bg-gray-300" />
-          <div className="flex items-center gap-2">
-            <span className="text-gray-400">📈</span>
-            <span>{masteredCount} / {totalSessionSize}</span>
-          </div>
+          {progressPill}
         </div>
         <button
           onClick={() => handleEndSession(false)}
@@ -441,7 +556,7 @@ function PracticeSession() {
       <div className="flex-1 w-full md:max-w-2xl flex flex-col md:items-center md:justify-center md:-mt-12 min-h-0">
         <div
           className="flex-[5] md:flex-none w-full md:aspect-[4/3] perspective-1000 cursor-pointer min-h-0"
-          onClick={() => setFlipped(!flipped)}
+          onClick={() => { if (isLocked) return; setFlipped(!flipped); }}
         >
           <motion.div
             className="w-full h-full relative preserve-3d"
@@ -590,26 +705,29 @@ function PracticeSession() {
         </div>
 
         {/* Action Buttons */}
-        <div className={`flex-[3] md:flex-none md:mt-12 flex items-center justify-center gap-4 transition-all duration-300 ${flipped ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+        <div className={`flex-[3] md:flex-none md:mt-12 flex items-center justify-center gap-4 transition-all duration-300 ${flipped ? 'opacity-100' : 'opacity-0 pointer-events-none'} ${isLocked ? 'pointer-events-none' : ''}`}>
           <button
             onClick={(e) => { e.stopPropagation(); handleAction("forgot"); }}
-            className="flex flex-col items-center justify-center w-24 h-24 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition shadow-sm"
+            disabled={isLocked}
+            className="flex flex-col items-center justify-center w-24 h-24 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition shadow-sm disabled:opacity-100"
           >
             <X className="w-8 h-8 mb-1" />
             <span className="text-xs font-bold uppercase tracking-wider">Forgot</span>
           </button>
-          
+
           <button
             onClick={(e) => { e.stopPropagation(); handleAction("meh"); }}
-            className="flex flex-col items-center justify-center w-24 h-24 rounded-full bg-yellow-100 text-yellow-600 hover:bg-yellow-200 transition shadow-sm"
+            disabled={isLocked}
+            className="flex flex-col items-center justify-center w-24 h-24 rounded-full bg-yellow-100 text-yellow-600 hover:bg-yellow-200 transition shadow-sm disabled:opacity-100"
           >
             <HelpCircle className="w-8 h-8 mb-1" />
             <span className="text-xs font-bold uppercase tracking-wider">Unsure</span>
           </button>
-          
+
           <button
             onClick={(e) => { e.stopPropagation(); handleAction("know"); }}
-            className="flex flex-col items-center justify-center w-24 h-24 rounded-full bg-green-100 text-green-600 hover:bg-green-200 transition shadow-sm"
+            disabled={isLocked}
+            className="flex flex-col items-center justify-center w-24 h-24 rounded-full bg-green-100 text-green-600 hover:bg-green-200 transition shadow-sm disabled:opacity-100"
           >
             <Check className="w-8 h-8 mb-1" />
             <span className="text-xs font-bold uppercase tracking-wider">Knew It</span>

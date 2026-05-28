@@ -20,8 +20,8 @@ flath/
 
 ## Features
 
-- **Vault** — browse, add, edit, and archive your personal Greek word library. Accent-insensitive search. CSV bulk import (desktop). Scrollable on mobile.
-- **Practice** — adaptive sessions with two tracks: recognition (Greek → French) and production (French → Greek). Mixed mode weighs harder words first. Exclude successful words (>75% success rate in last 7 days) from sessions.
+- **Vault** — browse, add, edit, and archive your personal Greek word library. Accent-insensitive search. CSV bulk import (desktop). Scrollable on mobile. Optional "exclude successful" filter mirrors the practice setup.
+- **Practice** — adaptive sessions with two tracks: recognition (Greek → French) and production (French → Greek). Mixed mode weighs harder words first. Exclude successful words (>75% in last 7 days) and/or words reviewed today. Per-state progress (Known / Not seen / Retry) plus an iteration counter for recycled passes. A 5-second retention intercept blocks input on missed cards so the correct answer registers. Hard-won wins (first-attempt correct on historically tough words) get a 🎉 marker on the session recap.
 - **Word Packs** — manual or smart (filter-based) packs. Scope a practice session to a pack.
 - **Duel** — real-time multiplayer vocabulary battle. Two players race through shared words. Desktop only.
 - **PWA** — installable on Android via Chrome "Add to Home Screen". Runs fullscreen with no browser chrome.
@@ -87,7 +87,7 @@ Auto-deploys on every push to `main`.
 
 One codebase, two presentations. A `useSurface()` hook (`flath-app/lib/surface.ts`) detects at runtime whether the user is on desktop, mobile browser, or installed PWA. Features are gated — not deleted — so the codebase stays unified.
 
-**Currently desktop-only:** Duel mode, CSV import, batch edit, batch archive, batch delete.
+**Currently desktop-only:** Duel mode, CSV import, batch edit, batch archive, batch delete, and the numeric Vault filters (Success Rate, Review Count, Heat, Frequency Rank).
 
 See `flath-app/CLAUDE.md` for the full surface-gating rules (auto-loaded by Claude Code on every session).
 
@@ -119,6 +119,22 @@ This prints the current PoS distribution and lists any rows that would be rewrit
 ---
 
 ## Changelog
+
+### Phase 3 — Practice Engine Overhaul (May 2026)
+
+**Session filters**
+- New "Exclude words reviewed today" toggle in the practice setup (default ON). Compares against the calendar date, not a 24h rolling window.
+- The Vault now exposes the same "Exclude successful (>75% last 7d)" filter as practice, so users can browse the same working set.
+
+**In-session UX**
+- Progress display now shows three single-letter counters (**K** Known / **N** Not seen / **R** Retry) plus a `Review #i` iteration counter that increments when the queue recycles through unmastered cards.
+- After a missed card (Unsure / Forgot), all card actions are silently disabled for 5 seconds while the answer stays on screen — no countdown UI, just enforced exposure.
+
+**Session recap**
+- A 🎉 marker appears next to words that were answered correctly on the FIRST attempt this session AND were historically hard (avg success rate <40%, or the most recent prior attempt was "forgot"). Backed by a new `getLastAttemptOutcomes` server action.
+
+**Mobile vault cleanup**
+- The numeric range filters (Success Rate, Review Count, Frequency Rank) and the Heat chip filter are now hidden on mobile to declutter the filter strip. State is preserved; only the UI is gated.
 
 ### Phase 2 — Data Management, RBAC & CSV Import (May 2026)
 

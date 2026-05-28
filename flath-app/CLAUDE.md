@@ -34,6 +34,7 @@ When you change one of these, update this list AND the comment at the gate site.
 - Batch edit modal + per-row checkboxes + select-all in vault — `app/vault/page.tsx`
 - Batch archive button in vault selection toolbar — `app/vault/page.tsx`
 - Batch delete button + confirm dialog in vault — `app/vault/page.tsx`
+- Vault filters: Success Rate, Review Count, Heat, Frequency Rank — `app/vault/page.tsx` (hidden on mobile to declutter)
 
 The `/duel` route itself is NOT route-blocked — typing the URL still loads it. Gate is purely UI hiding.
 

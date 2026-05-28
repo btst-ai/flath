@@ -73,6 +73,8 @@ export default function VaultPage() {
   const [filterLastReviewed, setFilterLastReviewed] = useState<"today" | "week" | "month" | null>(null);
   const [filterLastReviewedMode, setFilterLastReviewedMode] = useState<"less_than" | "more_than">("less_than");
   const [filterHeat, setFilterHeat] = useState<"hot" | "warm" | "cold" | null>(null);
+  const [filterExcludeSuccessful, setFilterExcludeSuccessful] = useState(false);
+  const [masteredIds, setMasteredIds] = useState<Set<string>>(new Set());
   const [customThemes, setCustomThemes] = useState<string[]>([]);
   const [showNewThemeInput, setShowNewThemeInput] = useState(false);
   const [newThemeName, setNewThemeName] = useState("");
@@ -86,7 +88,7 @@ export default function VaultPage() {
   // Reset visible count when filters or sorting change
   useEffect(() => {
     setVisibleCount(50);
-  }, [activeTab, sortField, sortDirection, filterTheme, filterSuccessMin, filterSuccessMax, filterFreqMin, filterFreqMax, filterReviewMin, filterReviewMax, filterStatus, searchQuery, filterPOS, filterLastReviewed, filterLastReviewedMode, filterHeat]);
+  }, [activeTab, sortField, sortDirection, filterTheme, filterSuccessMin, filterSuccessMax, filterFreqMin, filterFreqMax, filterReviewMin, filterReviewMax, filterStatus, searchQuery, filterPOS, filterLastReviewed, filterLastReviewedMode, filterHeat, filterExcludeSuccessful]);
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
@@ -174,6 +176,36 @@ export default function VaultPage() {
       fetchVocab();
     }
   }, [userId, fetchVocab]);
+
+  // Load "mastered" ids (>75% success rate over last 7 days) lazily when the
+  // exclude-successful filter is toggled on. Mirrors filterMasteredWords in
+  // lib/sessionQueue.ts so Vault stays in sync with practice setup.
+  useEffect(() => {
+    if (!filterExcludeSuccessful || !userId) return;
+    let cancelled = false;
+    (async () => {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await supabase
+        .from("attempts_history")
+        .select("word_id, outcome")
+        .eq("user_id", userId)
+        .gte("ts", sevenDaysAgo);
+      if (cancelled || error || !data) return;
+      const totals = new Map<string, number>();
+      const knows = new Map<string, number>();
+      for (const a of data) {
+        totals.set(a.word_id, (totals.get(a.word_id) || 0) + 1);
+        if (a.outcome === "know") knows.set(a.word_id, (knows.get(a.word_id) || 0) + 1);
+      }
+      const mastered = new Set<string>();
+      for (const [wid, total] of totals.entries()) {
+        const rate = (knows.get(wid) || 0) / total;
+        if (rate > 0.75) mastered.add(wid);
+      }
+      setMasteredIds(mastered);
+    })();
+    return () => { cancelled = true; };
+  }, [filterExcludeSuccessful, userId]);
 
   const processFile = useCallback(async (file: File) => {
     if (!file.name.endsWith(".csv")) {
@@ -399,6 +431,9 @@ export default function VaultPage() {
     if (filterStatus === "fav") {
       data = data.filter(item => item.is_fav);
     }
+    if (filterExcludeSuccessful) {
+      data = data.filter(item => !masteredIds.has(item.word_id));
+    }
 
     if (filterSuccessMin !== "") {
       data = data.filter(item => Math.round((item.avg_success_rate_prod + item.avg_success_rate_rec) / 2) >= filterSuccessMin);
@@ -494,7 +529,7 @@ export default function VaultPage() {
       if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
       return 0;
     });
-  }, [myLibrary, sortField, sortDirection, filterTheme, filterSuccessMin, filterSuccessMax, filterFreqMin, filterFreqMax, filterReviewMin, filterReviewMax, filterStatus, searchQuery, filterPOS, filterLastReviewed, filterLastReviewedMode, filterHeat]);
+  }, [myLibrary, sortField, sortDirection, filterTheme, filterSuccessMin, filterSuccessMax, filterFreqMin, filterFreqMax, filterReviewMin, filterReviewMax, filterStatus, searchQuery, filterPOS, filterLastReviewed, filterLastReviewedMode, filterHeat, filterExcludeSuccessful, masteredIds]);
 
   const displayedRemoved = useMemo(() => {
     let data = myLibrary.filter(w => w.is_archived);
@@ -517,6 +552,9 @@ export default function VaultPage() {
     if (filterStatus === "fav") {
       data = data.filter(item => item.is_fav);
     }
+    if (filterExcludeSuccessful) {
+      data = data.filter(item => !masteredIds.has(item.word_id));
+    }
 
     if (filterSuccessMin !== "") {
       data = data.filter(item => Math.round((item.avg_success_rate_prod + item.avg_success_rate_rec) / 2) >= filterSuccessMin);
@@ -612,7 +650,7 @@ export default function VaultPage() {
       if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
       return 0;
     });
-  }, [myLibrary, sortField, sortDirection, filterTheme, filterSuccessMin, filterSuccessMax, filterFreqMin, filterFreqMax, filterReviewMin, filterReviewMax, filterStatus, searchQuery, filterPOS, filterLastReviewed, filterLastReviewedMode, filterHeat]);
+  }, [myLibrary, sortField, sortDirection, filterTheme, filterSuccessMin, filterSuccessMax, filterFreqMin, filterFreqMax, filterReviewMin, filterReviewMax, filterStatus, searchQuery, filterPOS, filterLastReviewed, filterLastReviewedMode, filterHeat, filterExcludeSuccessful, masteredIds]);
 
   const displayedOthers = useMemo(() => {
     let data = othersLibrary;
@@ -1019,38 +1057,55 @@ export default function VaultPage() {
             
             {activeTab === "my_library" && (
               <>
+                {/* desktop-only — see flath-app/CLAUDE.md */}
+                {showDesktopOnly && (
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Success Rate (%)</label>
                   <div className="flex items-center gap-1">
-                    <input 
-                      type="number" placeholder="Min" 
+                    <input
+                      type="number" placeholder="Min"
                       value={filterSuccessMin} onChange={(e) => setFilterSuccessMin(e.target.value ? Number(e.target.value) : "")}
-                      className="border border-gray-300 rounded p-1.5 text-sm w-16" 
+                      className="border border-gray-300 rounded p-1.5 text-sm w-16"
                     />
                     <span className="text-gray-400">-</span>
-                    <input 
-                      type="number" placeholder="Max" 
+                    <input
+                      type="number" placeholder="Max"
                       value={filterSuccessMax} onChange={(e) => setFilterSuccessMax(e.target.value ? Number(e.target.value) : "")}
-                      className="border border-gray-300 rounded p-1.5 text-sm w-16" 
+                      className="border border-gray-300 rounded p-1.5 text-sm w-16"
                     />
                   </div>
                 </div>
+                )}
 
+                {/* desktop-only — see flath-app/CLAUDE.md */}
+                {showDesktopOnly && (
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Review Count</label>
                   <div className="flex items-center gap-1">
-                    <input 
-                      type="number" placeholder="Min" 
+                    <input
+                      type="number" placeholder="Min"
                       value={filterReviewMin} onChange={(e) => setFilterReviewMin(e.target.value ? Number(e.target.value) : "")}
-                      className="border border-gray-300 rounded p-1.5 text-sm w-16" 
+                      className="border border-gray-300 rounded p-1.5 text-sm w-16"
                     />
                     <span className="text-gray-400">-</span>
-                    <input 
-                      type="number" placeholder="Max" 
+                    <input
+                      type="number" placeholder="Max"
                       value={filterReviewMax} onChange={(e) => setFilterReviewMax(e.target.value ? Number(e.target.value) : "")}
-                      className="border border-gray-300 rounded p-1.5 text-sm w-16" 
+                      className="border border-gray-300 rounded p-1.5 text-sm w-16"
                     />
                   </div>
+                </div>
+                )}
+
+                <div className="flex items-center gap-2 pb-1.5">
+                  <input
+                    type="checkbox"
+                    id="exclude-successful-vault"
+                    checked={filterExcludeSuccessful}
+                    onChange={(e) => setFilterExcludeSuccessful(e.target.checked)}
+                    className="rounded text-blue-600 border-gray-300 focus:ring-blue-500"
+                  />
+                  <label htmlFor="exclude-successful-vault" className="text-sm font-medium text-gray-700">Exclude successful (&gt;75% last 7d)</label>
                 </div>
 
                 <div className="flex items-center gap-2 pb-1.5">
@@ -1097,6 +1152,8 @@ export default function VaultPage() {
                   </div>
                 </div>
 
+                {/* desktop-only — see flath-app/CLAUDE.md */}
+                {showDesktopOnly && (
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Heat</label>
                   <div className="flex gap-1">
@@ -1117,9 +1174,12 @@ export default function VaultPage() {
                     ))}
                   </div>
                 </div>
+                )}
               </>
             )}
 
+            {/* desktop-only — see flath-app/CLAUDE.md */}
+            {showDesktopOnly && (
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Frequency Rank</label>
               <div className="flex items-center gap-1">
@@ -1132,17 +1192,19 @@ export default function VaultPage() {
                 <input 
                   type="number" placeholder="Max" 
                   value={filterFreqMax} onChange={(e) => setFilterFreqMax(e.target.value ? Number(e.target.value) : "")}
-                  className="border border-gray-300 rounded p-1.5 text-sm w-16" 
+                  className="border border-gray-300 rounded p-1.5 text-sm w-16"
                 />
               </div>
             </div>
+            )}
 
-            <button 
+            <button
               onClick={() => {
                 setFilterTheme(""); setFilterSuccessMin(""); setFilterSuccessMax("");
                 setFilterFreqMin(""); setFilterFreqMax(""); setFilterReviewMin(""); setFilterReviewMax("");
                 setFilterStatus("all"); setSearchQuery(""); setFilterPOS("");
                 setFilterLastReviewed(null); setFilterLastReviewedMode("less_than"); setFilterHeat(null);
+                setFilterExcludeSuccessful(false);
                 setSortField("smart"); setSortDirection("asc");
               }}
               className="text-sm text-blue-600 hover:text-blue-800 underline pb-2"

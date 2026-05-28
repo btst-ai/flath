@@ -80,6 +80,35 @@ export async function recomputeUserWordSettings(
   }
 }
 
+/**
+ * Fetch the most-recent prior attempt outcome (before `beforeTs`) for each
+ * given word id. Used by the session recap to decide which first-attempt-
+ * correct words qualify for a 🎉 marker.
+ */
+export async function getLastAttemptOutcomes(
+  userId: string,
+  wordIds: string[],
+  beforeTs: string,
+): Promise<Record<string, "know" | "meh" | "forgot">> {
+  if (wordIds.length === 0) return {};
+
+  const { data, error } = await browserSupabase
+    .from("attempts_history")
+    .select("word_id, outcome, ts")
+    .eq("user_id", userId)
+    .in("word_id", wordIds)
+    .lt("ts", beforeTs)
+    .order("ts", { ascending: false });
+
+  if (error || !data) return {};
+
+  const out: Record<string, "know" | "meh" | "forgot"> = {};
+  for (const row of data) {
+    if (!out[row.word_id]) out[row.word_id] = row.outcome;
+  }
+  return out;
+}
+
 export async function submitSessionAttempts(userId: string, attempts: any[]) {
   // 1. Insert attempts
   const historyInserts = attempts.map(a => ({

@@ -22,6 +22,7 @@ export function PracticeSelectionModal({ isOpen, onClose, userId }: PracticeSele
   const [mistakesLimit, setMistakesLimit] = useState<SessionSize>(25);
   const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
   const [excludeSuccessful, setExcludeSuccessful] = useState(true);
+  const [excludeReviewedToday, setExcludeReviewedToday] = useState(true);
 
   useEffect(() => {
     if (isOpen && userId) {
@@ -78,18 +79,32 @@ export function PracticeSelectionModal({ isOpen, onClose, userId }: PracticeSele
         </div>
 
         <div className="p-6 space-y-6 overflow-y-auto flex-1">
-          {/* Exclude Successful Toggle */}
-          <div className="flex items-center gap-3 pb-3 border-b border-gray-200">
-            <input
-              type="checkbox"
-              id="exclude-successful"
-              checked={excludeSuccessful}
-              onChange={(e) => setExcludeSuccessful(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300 text-gray-600 cursor-pointer"
-            />
-            <label htmlFor="exclude-successful" className="text-sm font-medium text-gray-700 cursor-pointer">
-              Exclude successful (&gt;75% in last 7 days)
-            </label>
+          {/* Exclusion Toggles */}
+          <div className="flex flex-col gap-2 pb-3 border-b border-gray-200">
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="exclude-successful"
+                checked={excludeSuccessful}
+                onChange={(e) => setExcludeSuccessful(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-gray-600 cursor-pointer"
+              />
+              <label htmlFor="exclude-successful" className="text-sm font-medium text-gray-700 cursor-pointer">
+                Exclude successful (&gt;75% in last 7 days)
+              </label>
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="exclude-reviewed-today"
+                checked={excludeReviewedToday}
+                onChange={(e) => setExcludeReviewedToday(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-gray-600 cursor-pointer"
+              />
+              <label htmlFor="exclude-reviewed-today" className="text-sm font-medium text-gray-700 cursor-pointer">
+                Exclude words reviewed today
+              </label>
+            </div>
           </div>
 
           {/* Smart Shuffle */}
@@ -117,7 +132,7 @@ export function PracticeSelectionModal({ isOpen, onClose, userId }: PracticeSele
                 Top {smartLimit} words selected by your priority rules (Heat › Success › Frequency).
               </p>
               <button
-                onClick={() => router.push(`/practice?mode=smart&limit=${smartLimit}&exclude_successful=${excludeSuccessful ? "1" : "0"}`)}
+                onClick={() => router.push(`/practice?mode=smart&limit=${smartLimit}&exclude_successful=${excludeSuccessful ? "1" : "0"}&exclude_today=${excludeReviewedToday ? "1" : "0"}`)}
                 className="w-full py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition"
               >
                 Start
@@ -150,7 +165,7 @@ export function PracticeSelectionModal({ isOpen, onClose, userId }: PracticeSele
                 Review words marked 'forgot' in the last 7 days that haven't been reviewed today (ordered by mistake count, then by Heat › Success › Frequency).
               </p>
               <button
-                onClick={() => router.push(`/practice?mode=mistakes&limit=${mistakesLimit}&exclude_successful=${excludeSuccessful ? "1" : "0"}`)}
+                onClick={() => router.push(`/practice?mode=mistakes&limit=${mistakesLimit}&exclude_successful=${excludeSuccessful ? "1" : "0"}&exclude_today=${excludeReviewedToday ? "1" : "0"}`)}
                 className="w-full py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold rounded-lg transition"
               >
                 Start
@@ -183,7 +198,7 @@ export function PracticeSelectionModal({ isOpen, onClose, userId }: PracticeSele
                 {randomLimit} words picked at random from your library.
               </p>
               <button
-                onClick={() => router.push(`/practice?mode=random&limit=${randomLimit}&exclude_successful=${excludeSuccessful ? "1" : "0"}`)}
+                onClick={() => router.push(`/practice?mode=random&limit=${randomLimit}&exclude_successful=${excludeSuccessful ? "1" : "0"}&exclude_today=${excludeReviewedToday ? "1" : "0"}`)}
                 className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg transition"
               >
                 Start
@@ -240,7 +255,7 @@ export function PracticeSelectionModal({ isOpen, onClose, userId }: PracticeSele
               <button
                 onClick={() => {
                   if (selectedPackId) {
-                    router.push(`/practice?pack_id=${selectedPackId}&limit=${packLimit}&exclude_successful=${excludeSuccessful ? "1" : "0"}`);
+                    router.push(`/practice?pack_id=${selectedPackId}&limit=${packLimit}&exclude_successful=${excludeSuccessful ? "1" : "0"}&exclude_today=${excludeReviewedToday ? "1" : "0"}`);
                   }
                 }}
                 disabled={!selectedPackId || isLoadingPacks}
