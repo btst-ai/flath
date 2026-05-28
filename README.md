@@ -21,7 +21,7 @@ flath/
 ## Features
 
 - **Vault** — browse, add, edit, and archive your personal Greek word library. Accent-insensitive search. CSV bulk import (desktop). Scrollable on mobile. Optional "exclude successful" filter mirrors the practice setup.
-- **Practice** — adaptive sessions with two tracks: recognition (Greek → French) and production (French → Greek). Mixed mode weighs harder words first. Exclude successful words (>75% in last 7 days) and/or words reviewed today. Per-state progress (Known / Not seen / Retry) plus an iteration counter for recycled passes. A 5-second retention intercept blocks input on missed cards so the correct answer registers. Hard-won wins (first-attempt correct on historically tough words) get a 🎉 marker on the session recap.
+- **Practice** — adaptive sessions with two tracks: recognition (Greek → French) and production (French → Greek). Mixed mode uses a dynamic modality randomizer: baseline 70% Production bias, continuously adjusted by the delta between recent Production and Recognition failures over the last 14 days, so whichever track is currently weaker gets more cards. Exclude successful words (>75% in last 7 days) and/or words reviewed today. Per-state progress (Known / Not seen / Retry) plus an iteration counter for recycled passes. A 5-second retention intercept blocks input on missed cards so the correct answer registers. Hard-won wins (first-attempt correct on historically tough words) get a 🎉 marker on the session recap.
 - **Word Packs** — manual or smart (filter-based) packs. Scope a practice session to a pack.
 - **Duel** — real-time multiplayer vocabulary battle. Two players race through shared words. Desktop only.
 - **PWA** — installable on Android via Chrome "Add to Home Screen". Runs fullscreen with no browser chrome.
@@ -119,6 +119,17 @@ This prints the current PoS distribution and lists any rows that would be rewrit
 ---
 
 ## Changelog
+
+### Phase 3.1 — Adaptive Modality Distribution (May 2026)
+
+**Dynamic modality randomizer**
+- Replaced the per-word 20%-delta + 50/50 coin-flip logic in `assignTracks()` with a population-level adaptive bias.
+- New `computeProdProbability()` helper in `lib/sessionQueue.ts` computes `pProd` from the last 14 days of `attempts_history`: baseline 70% Production, adaptive swing up to ±25% driven by the failure-share delta between Production and Recognition tracks. Hard floor/ceiling at [0.40, 0.95] so neither modality starves.
+- New `getModalityFailureCounts()` server action in `app/actions/session.ts` queries `attempts_history` for `outcome = 'forgot'` in the last 14 days, grouped by `mode`.
+- `assignTracks()` now accepts an optional `pProd` parameter; in "mixed" mode, each card is sampled independently against it.
+- No DB schema change — uses existing `attempts_history.mode` and `attempts_history.outcome` columns.
+
+---
 
 ### Phase 3 — Practice Engine Overhaul (May 2026)
 

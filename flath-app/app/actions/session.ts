@@ -109,6 +109,33 @@ export async function getLastAttemptOutcomes(
   return out;
 }
 
+/**
+ * Count Production vs Recognition failures in the last `days` days.
+ * Used at session start to compute the adaptive modality bias (pProd).
+ */
+export async function getModalityFailureCounts(
+  userId: string,
+  days = 14,
+): Promise<{ prodFailures: number; recFailures: number }> {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await browserSupabase
+    .from("attempts_history")
+    .select("mode")
+    .eq("user_id", userId)
+    .eq("outcome", "forgot")
+    .gte("ts", since);
+
+  if (error || !data) return { prodFailures: 0, recFailures: 0 };
+
+  let prodFailures = 0;
+  let recFailures = 0;
+  for (const row of data) {
+    if (row.mode === "prod") prodFailures++;
+    else recFailures++;
+  }
+  return { prodFailures, recFailures };
+}
+
 export async function submitSessionAttempts(userId: string, attempts: any[]) {
   // 1. Insert attempts
   const historyInserts = attempts.map(a => ({

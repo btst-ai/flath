@@ -9,7 +9,7 @@ Built with Next.js 16 (App Router), Supabase, and Tailwind CSS. Deployed on Verc
 ## Features
 
 - **Vault** — browse, add, edit, and archive your personal Greek word library. Import words via CSV (desktop only).
-- **Practice** — spaced-repetition sessions with two tracks: recognition (Greek → French) and production (French → Greek). Adaptive mixed mode weighs harder words first.
+- **Practice** — spaced-repetition sessions with two tracks: recognition (Greek → French) and production (French → Greek). Mixed mode uses a dynamic modality randomizer: 70% Production baseline, adjusted each session by the delta between recent Production and Recognition failures (14-day window) so the weaker track always gets more cards.
 - **Word Packs** — organise words into manual or smart (filter-based) packs. Start a practice session scoped to a pack.
 - **Duel** — real-time multiplayer vocabulary battle. Two players race through shared words. Desktop only.
 - **PWA** — installable from Chrome on Android via "Add to Home Screen". Runs fullscreen, no browser chrome.

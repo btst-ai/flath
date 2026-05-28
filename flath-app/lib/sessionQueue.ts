@@ -281,12 +281,35 @@ export function sortAveragePriority(
 // ---------------------------------------------------------------------------
 
 /**
- * Assign rec/prod to each word.
- * - "prod" / "rec": forced track
- * - "mixed": adaptive weighting — if one track is 20%+ stronger, force the
- *   other; otherwise pick 50/50 randomly.
+ * Compute the probability of assigning a card to the Production (FR→EL) track.
+ *
+ * Baseline is 0.70 (Production-favoured). The adaptive component shifts it
+ * based on which modality has accumulated more failures recently: more
+ * Production failures → higher pProd (siphon towards the weaker modality).
+ *
+ * Returns baseline when the failure sample is too small (<10 total).
  */
-export function assignTracks(words: UserSetting[], mode: CardMode): SessionWord[] {
+export function computeProdProbability(
+  prodFailures14d: number,
+  recFailures14d: number,
+  baseline = 0.70,
+  maxSwing = 0.25,
+): number {
+  const total = prodFailures14d + recFailures14d;
+  if (total < 10) return baseline;
+  const failureShareProd = prodFailures14d / total;
+  const vulnerabilityDelta = failureShareProd - 0.5;
+  const raw = baseline + vulnerabilityDelta * 2 * maxSwing;
+  const clamped = Math.min(baseline + maxSwing, Math.max(baseline - maxSwing, raw));
+  return Math.min(0.95, Math.max(0.40, clamped));
+}
+
+/**
+ * Assign rec/prod track to each word.
+ * - "prod" / "rec": forced track
+ * - "mixed": sample each word independently against pProd (default 0.70)
+ */
+export function assignTracks(words: UserSetting[], mode: CardMode, pProd = 0.70): SessionWord[] {
   return words.map(word => {
     let track: Track;
     if (mode === "prod") {
@@ -294,13 +317,7 @@ export function assignTracks(words: UserSetting[], mode: CardMode): SessionWord[
     } else if (mode === "rec") {
       track = "rec";
     } else {
-      if (word.avg_success_rate_rec > word.avg_success_rate_prod + 20) {
-        track = "prod"; // Recognition is much better, force Production
-      } else if (word.avg_success_rate_prod > word.avg_success_rate_rec + 20) {
-        track = "rec";  // Production is much better, force Recognition
-      } else {
-        track = Math.random() > 0.5 ? "rec" : "prod";
-      }
+      track = Math.random() < pProd ? "prod" : "rec";
     }
     return { ...word, track };
   });

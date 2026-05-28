@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { motion } from "framer-motion";
 import { Check, X, HelpCircle, StopCircle, Star, Archive, Edit2, Copy, Search } from "lucide-react";
-import { submitSessionAttempts, getLastAttemptOutcomes } from "@/app/actions/session";
+import { submitSessionAttempts, getLastAttemptOutcomes, getModalityFailureCounts } from "@/app/actions/session";
 import { EditWordModal, getDifficultyFromRank } from "@/components/EditWordModal";
 import {
   fetchUserWords,
@@ -14,6 +14,7 @@ import {
   sortSoloPriority,
   randomShuffle,
   assignTracks,
+  computeProdProbability,
   type SessionWord,
   type UserSetting,
 } from "@/lib/sessionQueue";
@@ -154,7 +155,9 @@ function PracticeSession() {
       ordered = sortSoloPriority(filteredWords);
     }
 
-    const sessionWords = assignTracks(ordered.slice(0, limit), "mixed");
+    const { prodFailures, recFailures } = await getModalityFailureCounts(userId, 14);
+    const pProd = computeProdProbability(prodFailures, recFailures);
+    const sessionWords = assignTracks(ordered.slice(0, limit), "mixed", pProd);
 
     setQueue(sessionWords);
     setSessionWords(sessionWords);
