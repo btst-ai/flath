@@ -105,7 +105,7 @@ export default function Home() {
             </button>
             <button
               onClick={handleLogout}
-              className="mt-6 text-sm text-gray-500 hover:text-gray-800 underline transition"
+              className="mt-6 text-sm text-gray-700 hover:text-gray-900 underline transition"
             >
               Sign Out
             </button>
@@ -118,7 +118,7 @@ export default function Home() {
             >
               Sign In
             </button>
-            <p className="text-sm text-gray-500 mt-4">
+            <p className="text-sm text-gray-700 mt-4">
               You must be logged in to access the vault or practice features.
             </p>
           </div>

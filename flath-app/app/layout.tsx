@@ -60,7 +60,7 @@ export default function RootLayout({
             <FloatingAddButton />
             {children}
           </div>
-          <Toaster richColors position="top-right" />
+          <Toaster richColors position="top-right" toastOptions={{ className: "z-[9999]" }} />
         </body>
     </html>
   );

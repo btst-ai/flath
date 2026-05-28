@@ -105,6 +105,7 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
             <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide">Greek Word</label>
             <input
               type="text"
+              lang="el"
               value={greekText}
               onChange={(e) => setGreekText(e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition font-serif text-lg"
@@ -116,6 +117,7 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
             <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide">Translation</label>
             <input
               type="text"
+              lang="fr"
               value={frenchText}
               onChange={(e) => setFrenchText(e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"

@@ -20,8 +20,8 @@ flath/
 
 ## Features
 
-- **Vault** — browse, add, edit, and archive your personal Greek word library. CSV bulk import (desktop). Scrollable on mobile.
-- **Practice** — adaptive sessions with two tracks: recognition (Greek → French) and production (French → Greek). Mixed mode weighs harder words first.
+- **Vault** — browse, add, edit, and archive your personal Greek word library. Accent-insensitive search (type "μαζι" → matches "μαζί", "mange" → matches "mangé"). CSV bulk import (desktop). Scrollable on mobile.
+- **Practice** — adaptive sessions with two tracks: recognition (Greek → French) and production (French → Greek). Mixed mode weighs harder words first. Exclude successful words (>75% success rate in last 7 days) from sessions.
 - **Word Packs** — manual or smart (filter-based) packs. Scope a practice session to a pack.
 - **Duel** — real-time multiplayer vocabulary battle. Two players race through shared words. Desktop only.
 - **PWA** — installable on Android via Chrome "Add to Home Screen". Runs fullscreen with no browser chrome.

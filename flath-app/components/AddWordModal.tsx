@@ -77,6 +77,7 @@ export function AddWordModal({ isOpen, onClose }: AddWordModalProps) {
               <input
                 autoFocus
                 type="text"
+                lang="el"
                 value={greekText}
                 onChange={(e) => setGreekText(e.target.value)}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition font-serif text-lg"
@@ -88,6 +89,7 @@ export function AddWordModal({ isOpen, onClose }: AddWordModalProps) {
               <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide">Translation *</label>
               <input
                 type="text"
+                lang="fr"
                 value={frenchText}
                 onChange={(e) => setFrenchText(e.target.value)}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"

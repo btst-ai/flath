@@ -13,6 +13,7 @@ import { ImportSummaryModal } from "@/components/ImportSummaryModal";
 import { BatchEditModal } from "@/components/BatchEditModal";
 import { PracticeSelectionModal } from "@/components/PracticeSelectionModal";
 import { useSurface, isMobileSurface } from "@/lib/surface";
+import { normalizeForSearch } from "@/lib/normalize";
 
 interface CsvRow {
   "Greek Word"?: string;
@@ -333,10 +334,10 @@ export default function VaultPage() {
 
     // Filters
     if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      data = data.filter(item => 
-        (item.words_dim?.greek_text || "").toLowerCase().includes(q) ||
-        (item.words_dim?.french_text || "").toLowerCase().includes(q)
+      const q = normalizeForSearch(searchQuery);
+      data = data.filter(item =>
+        normalizeForSearch(item.words_dim?.greek_text || "").includes(q) ||
+        normalizeForSearch(item.words_dim?.french_text || "").includes(q)
       );
     }
     
@@ -451,10 +452,10 @@ export default function VaultPage() {
 
     // Filters
     if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      data = data.filter(item => 
-        (item.words_dim?.greek_text || "").toLowerCase().includes(q) ||
-        (item.words_dim?.french_text || "").toLowerCase().includes(q)
+      const q = normalizeForSearch(searchQuery);
+      data = data.filter(item =>
+        normalizeForSearch(item.words_dim?.greek_text || "").includes(q) ||
+        normalizeForSearch(item.words_dim?.french_text || "").includes(q)
       );
     }
 
@@ -569,10 +570,10 @@ export default function VaultPage() {
 
     // Filters for 'others' are limited as they don't have personal stats
     if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      data = data.filter(item => 
-        (item.greek_text || "").toLowerCase().includes(q) ||
-        (item.french_text || "").toLowerCase().includes(q)
+      const q = normalizeForSearch(searchQuery);
+      data = data.filter(item =>
+        normalizeForSearch(item.greek_text || "").includes(q) ||
+        normalizeForSearch(item.french_text || "").includes(q)
       );
     }
 
@@ -751,7 +752,7 @@ export default function VaultPage() {
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
               Advanced Word Vault
             </h1>
-            <p className="mt-2 text-gray-500 text-sm">
+            <p className="mt-2 text-gray-700 text-sm">
               Manage your Greek vocabulary, view stats, and import words.
             </p>
           </div>
@@ -866,7 +867,7 @@ export default function VaultPage() {
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 mb-6">
           <div className="flex flex-wrap gap-4 items-end">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Theme</label>
+              <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Theme</label>
               {showNewThemeInput ? (
                 <div className="flex items-center gap-1">
                   <input

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { normalizeForSearch } from "@/lib/normalize";
 import { supabase } from "@/lib/supabase";
 import { X, Search, Plus, Trash2, Star } from "lucide-react";
 import { toast } from "sonner";
@@ -63,14 +64,14 @@ export function EditPackModal({ isOpen, onClose, pack, onSuccess, userId }: Edit
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim() || !allWords.length) return [];
-    const q = searchQuery.toLowerCase();
+    const q = normalizeForSearch(searchQuery);
     const currentPackIds = new Set(packWords.map(w => w.word_id));
-    
+
     return allWords
       .filter(w => !currentPackIds.has(w.word_id))
-      .filter(w => 
-        (w.words_dim?.greek_text || "").toLowerCase().includes(q) ||
-        (w.words_dim?.french_text || "").toLowerCase().includes(q)
+      .filter(w =>
+        normalizeForSearch(w.words_dim?.greek_text || "").includes(q) ||
+        normalizeForSearch(w.words_dim?.french_text || "").includes(q)
       )
       .slice(0, 10); // Show max 10 results
   }, [searchQuery, allWords, packWords]);

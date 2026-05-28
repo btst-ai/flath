@@ -293,7 +293,7 @@ function PlayerActionPanel({
             }`}
           >
             <span>{label}</span>
-            <kbd className="ml-2 text-xs font-mono opacity-50">{keys[i]}</kbd>
+            <kbd className="ml-2 text-xs font-mono opacity-75">{keys[i]}</kbd>
           </button>
         ))}
       </div>
@@ -312,7 +312,7 @@ function PlayerActionPanel({
           }`}
         >
           <span>{label}</span>
-          <kbd className="ml-2 text-xs font-mono opacity-50">{keys[i]}</kbd>
+          <kbd className="ml-2 text-xs font-mono opacity-75">{keys[i]}</kbd>
         </button>
       ))}
     </div>

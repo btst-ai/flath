@@ -606,19 +606,19 @@ export default function PacksPage() {
                 
                 <div className="grid grid-cols-2 gap-2 mb-4 text-sm bg-gray-50 p-3 rounded-lg border border-gray-100">
                   <div className="flex flex-col">
-                    <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Words</span>
+                    <span className="text-gray-600 text-xs font-semibold uppercase tracking-wider">Words</span>
                     <span className="font-medium text-gray-800">{pack.numWords || 0}</span>
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Avg Success</span>
+                    <span className="text-gray-600 text-xs font-semibold uppercase tracking-wider">Avg Success</span>
                     <span className="font-medium text-green-600">{pack.avgSuccess || 0}%</span>
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Difficulty</span>
+                    <span className="text-gray-600 text-xs font-semibold uppercase tracking-wider">Difficulty</span>
                     <span className="font-medium text-gray-800 capitalize">{getDifficultyFromRank(pack.avgFreqRank || 99999)}</span>
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Avg Heat</span>
+                    <span className="text-gray-600 text-xs font-semibold uppercase tracking-wider">Avg Heat</span>
                     <span className="font-mono text-orange-500 font-medium">{(pack.avgHeat || 0) > 0 ? `+${pack.avgHeat}` : pack.avgHeat || 0}</span>
                   </div>
                 </div>
