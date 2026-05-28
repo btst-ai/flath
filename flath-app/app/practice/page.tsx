@@ -63,6 +63,7 @@ function PracticeSession() {
   // Phase 3: progress tracking
   const [seenWordIds, setSeenWordIds] = useState<Set<string>>(new Set());
   const [iteration, setIteration] = useState(1);
+  const [showIterationSplash, setShowIterationSplash] = useState(false);
   const [passStartIds, setPassStartIds] = useState<string[]>([]);
   const [firstAttemptOutcome, setFirstAttemptOutcome] = useState<Record<string, "know" | "meh" | "forgot">>({});
   const [sessionStartTs, setSessionStartTs] = useState<string>("");
@@ -234,6 +235,7 @@ function PracticeSession() {
           const isLastOfPass = passIds[passIds.length - 1] === currentWord.word_id;
           if (isLastOfPass) {
             setIteration(i => i + 1);
+            setShowIterationSplash(true);
             return newQueue.map(w => w.word_id);
           }
           return passIds;
@@ -272,6 +274,7 @@ function PracticeSession() {
           const isLastOfPass = passIds[passIds.length - 1] === currentWord.word_id;
           if (isLastOfPass) {
             setIteration(i => i + 1);
+            setShowIterationSplash(true);
             // The next pass is whatever remains
             return queue.slice(1).map(w => w.word_id);
           }
@@ -479,16 +482,16 @@ function PracticeSession() {
 
   const progressPill = (
     <div className="flex items-center gap-3">
-      <span className="flex items-center gap-1">
-        <span className="font-bold text-green-600">K</span>
+      <span className="flex items-center gap-1.5">
+        <span className="text-sm">🟢</span>
         <span className="font-mono">{knownCount}</span>
       </span>
-      <span className="flex items-center gap-1">
-        <span className="font-bold text-gray-400">N</span>
+      <span className="flex items-center gap-1.5">
+        <span className="text-sm">🟡</span>
         <span className="font-mono">{notSeenCount}</span>
       </span>
-      <span className="flex items-center gap-1">
-        <span className="font-bold text-red-600">R</span>
+      <span className="flex items-center gap-1.5">
+        <span className="text-sm">🔴</span>
         <span className="font-mono">{retryCount}</span>
       </span>
       <span className="w-px h-4 bg-gray-300" />
@@ -557,6 +560,16 @@ function PracticeSession() {
 
       {/* Card + action buttons: on mobile flex-col with 70/30 split */}
       <div className="flex-1 w-full md:max-w-2xl flex flex-col md:items-center md:justify-center md:-mt-12 min-h-0">
+        {showIterationSplash ? (
+          <div
+            className="flex-[5] md:flex-none w-full md:aspect-[4/3] min-h-0 bg-white rounded-3xl shadow-lg border border-gray-100 flex flex-col items-center justify-center gap-4 cursor-pointer select-none"
+            onClick={() => setShowIterationSplash(false)}
+          >
+            <span className="text-4xl">🔁</span>
+            <p className="text-xl font-semibold text-gray-700">Review #{iteration} starting</p>
+            <p className="text-sm text-gray-400">{queue.length} card{queue.length !== 1 ? "s" : ""} remaining — tap to continue</p>
+          </div>
+        ) : (
         <div
           className="flex-[5] md:flex-none w-full md:aspect-[4/3] perspective-1000 cursor-pointer min-h-0"
           onClick={() => { if (isLocked) return; setFlipped(!flipped); }}
@@ -706,9 +719,10 @@ function PracticeSession() {
             </div>
           </motion.div>
         </div>
+        )}
 
         {/* Action Buttons */}
-        <div className={`flex-[3] md:flex-none md:mt-12 flex items-center justify-center gap-4 transition-all duration-300 ${flipped ? 'opacity-100' : 'opacity-0 pointer-events-none'} ${isLocked ? 'pointer-events-none' : ''}`}>
+        <div className={`flex-[3] md:flex-none md:mt-12 flex items-center justify-center gap-4 transition-all duration-300 ${showIterationSplash ? 'opacity-0 pointer-events-none' : ''} ${flipped ? 'opacity-100' : 'opacity-0 pointer-events-none'} ${isLocked ? 'pointer-events-none' : ''}`}>
           <button
             onClick={(e) => { e.stopPropagation(); handleAction("forgot"); }}
             disabled={isLocked}
