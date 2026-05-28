@@ -521,11 +521,15 @@ function PracticeSession() {
       {/* Mobile controls: stats pill + end button stacked */}
       <div className="md:hidden flex flex-col gap-2 w-full mb-3">
         <div className="w-full flex items-center justify-center gap-4 bg-white px-4 py-3 rounded-full border border-gray-200 shadow-sm font-semibold text-gray-700">
-          <div className="flex items-center gap-2">
-            <span className="text-gray-400">⏱</span>
-            <span className="w-12 text-center font-mono">{formatTime(elapsedSeconds)}</span>
-          </div>
-          <div className="w-px h-4 bg-gray-300" />
+          {!isLocked && (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-gray-400">⏱</span>
+                <span className="w-12 text-center font-mono">{formatTime(elapsedSeconds)}</span>
+              </div>
+              <div className="w-px h-4 bg-gray-300" />
+            </>
+          )}
           {progressPill}
         </div>
         <div className="flex justify-center">
@@ -542,11 +546,15 @@ function PracticeSession() {
       {/* Desktop controls: stats + end side by side, no back arrow */}
       <div className="hidden md:flex w-full max-w-2xl items-center justify-between gap-2 mb-8 mt-4">
         <div className="flex items-center gap-6 bg-white px-6 py-3 rounded-full border border-gray-200 shadow-sm font-semibold text-gray-700">
-          <div className="flex items-center gap-2">
-            <span className="text-gray-400">⏱</span>
-            <span className="w-12 text-center font-mono">{formatTime(elapsedSeconds)}</span>
-          </div>
-          <div className="w-px h-4 bg-gray-300" />
+          {!isLocked && (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-gray-400">⏱</span>
+                <span className="w-12 text-center font-mono">{formatTime(elapsedSeconds)}</span>
+              </div>
+              <div className="w-px h-4 bg-gray-300" />
+            </>
+          )}
           {progressPill}
         </div>
         <button
@@ -722,7 +730,7 @@ function PracticeSession() {
         )}
 
         {/* Action Buttons */}
-        <div className={`flex-[3] md:flex-none md:mt-12 flex items-center justify-center gap-4 transition-all duration-300 ${showIterationSplash ? 'opacity-0 pointer-events-none' : ''} ${flipped ? 'opacity-100' : 'opacity-0 pointer-events-none'} ${isLocked ? 'pointer-events-none' : ''}`}>
+        <div className={`flex-[3] md:flex-none md:mt-12 flex items-center justify-center gap-4 transition-all duration-300 ${showIterationSplash || isLocked ? 'opacity-0 pointer-events-none' : ''} ${flipped ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
           <button
             onClick={(e) => { e.stopPropagation(); handleAction("forgot"); }}
             disabled={isLocked}
