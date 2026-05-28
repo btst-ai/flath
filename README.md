@@ -20,7 +20,7 @@ flath/
 
 ## Features
 
-- **Vault** — browse, add, edit, and archive your personal Greek word library. Accent-insensitive search (type "μαζι" → matches "μαζί", "mange" → matches "mangé"). CSV bulk import (desktop). Scrollable on mobile.
+- **Vault** — browse, add, edit, and archive your personal Greek word library. Accent-insensitive search. CSV bulk import (desktop). Scrollable on mobile.
 - **Practice** — adaptive sessions with two tracks: recognition (Greek → French) and production (French → Greek). Mixed mode weighs harder words first. Exclude successful words (>75% success rate in last 7 days) from sessions.
 - **Word Packs** — manual or smart (filter-based) packs. Scope a practice session to a pack.
 - **Duel** — real-time multiplayer vocabulary battle. Two players race through shared words. Desktop only.
@@ -87,7 +87,7 @@ Auto-deploys on every push to `main`.
 
 One codebase, two presentations. A `useSurface()` hook (`flath-app/lib/surface.ts`) detects at runtime whether the user is on desktop, mobile browser, or installed PWA. Features are gated — not deleted — so the codebase stays unified.
 
-**Currently desktop-only:** Duel mode, CSV import, batch edit.
+**Currently desktop-only:** Duel mode, CSV import, batch edit, batch archive, batch delete.
 
 See `flath-app/CLAUDE.md` for the full surface-gating rules (auto-loaded by Claude Code on every session).
 
@@ -97,7 +97,61 @@ See `flath-app/CLAUDE.md` for the full surface-gating rules (auto-loaded by Clau
 
 RLS is enabled on all tables. Standard policy: `auth.uid() = user_id`. The `duels` table uses an OR-policy for cross-player reads. Reference SQL in `flath-app/sql/`.
 
-Key tables: `words_dim`, `user_word_settings`, `attempts_history`, `word_packs`, `word_pack_items`, `duels`.
+Key tables: `words_dim`, `user_word_settings`, `attempts_history`, `word_packs`, `word_pack_items`, `duels`, `user_roles`.
+
+### Pending migrations
+
+Two migration files need to be run in the Supabase SQL editor before some Phase 2 features are fully enforced:
+
+| File | What it does | Run order |
+|------|-------------|-----------|
+| [`flath-app/sql/phase2_pos.sql`](flath-app/sql/phase2_pos.sql) | Backfills invalid PoS values to `Autre`, adds a NOT NULL column default, adds a CHECK constraint restricting `part_of_speech` to the 10 allowed French values | 1 |
+| [`flath-app/sql/phase2_rbac.sql`](flath-app/sql/phase2_rbac.sql) | Creates `user_roles` table, adds `is_admin()` helper function, enables RLS on `words_dim` with owner-or-admin policies, seeds the project owner as admin | 2 |
+
+Before running `phase2_pos.sql`, check what would change:
+
+```bash
+cd flath-app && node scripts/preview_pos_migration.mjs
+```
+
+This prints the current PoS distribution and lists any rows that would be rewritten to `Autre` — nothing is mutated.
+
+---
+
+## Changelog
+
+### Phase 2 — Data Management, RBAC & CSV Import (May 2026)
+
+**Part of Speech engine**
+- `part_of_speech` is now a controlled vocabulary: `Adjectif`, `Adverbe`, `Conjonction`, `Interjection`, `Nom`, `Phrase`, `Preposition`, `Verbe`, `Pronom`, `Autre`. Invalid or blank values fall back to `Autre`.
+- DB: CHECK constraint + NOT NULL default (run `phase2_pos.sql`).
+- UI: all PoS fields are now dropdowns. New words default to `Nom`. Batch edit supports optional PoS override.
+
+**Access control (RBAC)**
+- New `user_roles` table with a single `admin` role.
+- RLS policies on `words_dim`: owners can edit their own words; admins can edit any word including global system words (`created_by_user_id IS NULL`).
+- `EditWordModal` shows a lock badge and disables all inputs for words the current user cannot edit.
+- Run `phase2_rbac.sql` to enable (seeds the project owner as admin).
+
+**CSV import — matrix recap**
+- `ImportSummaryModal` replaced with a full difficulty × theme matrix. Click any cell to expand an inline drawer showing the word pairs for that bucket.
+- Inline editing in the drawer: edit Greek text, translation, PoS, and theme directly and save without leaving the modal. Matrix counts update live on save.
+- Theme management toolbar: rename a theme (scoped to imported words) or merge one theme into another.
+- New optional CSV columns: `Frequency Rank` (`Matched` → real rank from `el_50k.txt` frequency list, `Niche` → 8000) and `Part of Speech` (coerced to allowed values).
+- `Matched` rank lookup: strips leading Greek articles, takes the first token (handles verb pairs like `τρώω, έφαγα`), looks up in the 50k-word frequency list. Unmatched words noted in the recap.
+
+**Vault batch actions**
+- New toolbar buttons: **Archive** (sets `is_archived = true` for selected words) and **Delete** (permanent delete for owned words; library removal for others). Both gated to desktop, both require the existing multi-select state.
+- Delete has a confirm dialog.
+- "Added by others" single-row button relabeled to "My Library" with a wider hit target.
+
+**New files**
+- `flath-app/sql/phase2_pos.sql` — PoS migration (run in Supabase SQL editor)
+- `flath-app/sql/phase2_rbac.sql` — RBAC migration (run in Supabase SQL editor)
+- `flath-app/scripts/preview_pos_migration.mjs` — read-only DB preview before running the PoS migration
+- `flath-app/lib/freqLookup.ts` — memoized frequency map loader
+- `flath-app/hooks/useIsAdmin.ts` — cached admin role hook
+- `flath-app/public/datasets/el_50k.txt` — Greek frequency list (50k words) served as a static asset
 
 ---
 

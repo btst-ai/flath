@@ -32,6 +32,8 @@ When you change one of these, update this list AND the comment at the gate site.
 - Duel mode entry on home — `app/page.tsx`
 - CSV import section in vault — `app/vault/page.tsx`
 - Batch edit modal + per-row checkboxes + select-all in vault — `app/vault/page.tsx`
+- Batch archive button in vault selection toolbar — `app/vault/page.tsx`
+- Batch delete button + confirm dialog in vault — `app/vault/page.tsx`
 
 The `/duel` route itself is NOT route-blocked — typing the URL still loads it. Gate is purely UI hiding.
 

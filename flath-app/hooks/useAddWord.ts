@@ -8,6 +8,7 @@ export interface WordInput {
   french_text: string;
   part_of_speech: string;
   theme: string;
+  frequency_rank?: number;
 }
 
 export function useAddWord() {
@@ -40,7 +41,7 @@ export function useAddWord() {
   const addWords = useCallback(async (words: WordInput[]) => {
     setIsAdding(true);
     let successCount = 0;
-    const addedWordsStats: { theme: string; frequency_rank: number }[] = [];
+    const addedWordsStats: { id: string; greek_text: string; french_text: string; theme: string; part_of_speech: string; frequency_rank: number }[] = [];
     
     try {
       const { data: authData } = await supabase.auth.getUser();
@@ -112,9 +113,9 @@ export function useAddWord() {
             }
           }
         } else {
-          // 2. Word doesn't exist, get frequency and insert
-          const frequency = await getWordFrequency(word.greek_text);
-          
+          // 2. Word doesn't exist, get frequency (use provided rank if available) and insert
+          const frequency = word.frequency_rank ?? await getWordFrequency(word.greek_text);
+
           const { data: newWordData, error: insertError } = await supabase
             .from("words_dim")
             .insert({
@@ -152,8 +153,12 @@ export function useAddWord() {
         } else {
           successCount++;
           addedWordsStats.push({
-            theme: finalWordData.theme || 'General',
-            frequency_rank: finalWordData.frequency_rank || 99999
+            id: finalWordData.id,
+            greek_text: finalWordData.greek_text || "",
+            french_text: finalWordData.french_text || "",
+            theme: finalWordData.theme || "General",
+            part_of_speech: finalWordData.part_of_speech || "Autre",
+            frequency_rank: finalWordData.frequency_rank || 99999,
           });
         }
       }

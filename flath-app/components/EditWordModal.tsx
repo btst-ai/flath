@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { X } from "lucide-react";
+import { X, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { POS_VALUES, PosValue, coercePos } from "@/lib/normalize";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 
 export function getDifficultyFromRank(rank: number) {
   if (rank >= 1 && rank <= 1000) return "easy";
@@ -30,13 +32,20 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
   const [greekText, setGreekText] = useState("");
   const [frenchText, setFrenchText] = useState("");
   const [theme, setTheme] = useState("");
-  const [pos, setPos] = useState("");
+  const [pos, setPos] = useState<PosValue>("Nom");
   const [difficulty, setDifficulty] = useState("niche");
   const [isSaving, setIsSaving] = useState(false);
-  
+
   const [availableThemes, setAvailableThemes] = useState<string[]>([]);
   const [showThemeSuggestions, setShowThemeSuggestions] = useState(false);
   const themeInputRef = useRef<HTMLInputElement>(null);
+
+  const { isAdmin } = useIsAdmin();
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null));
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -53,14 +62,18 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
       setGreekText(word.greek_text || "");
       setFrenchText(word.french_text || "");
       setTheme(word.theme || "");
-      setPos(word.part_of_speech || "");
-      
+      setPos(coercePos(word.part_of_speech));
+
       const rank = word.frequency_rank > 0 ? word.frequency_rank : 99999;
       setDifficulty(getDifficultyFromRank(rank));
     }
   }, [word, isOpen]);
 
   if (!isOpen || !word) return null;
+
+  // A user can edit if they own the word or are an admin.
+  // Global system words have created_by_user_id = null — only admins can edit them.
+  const canEdit = isAdmin || (currentUserId !== null && word.created_by_user_id === currentUserId);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -94,7 +107,14 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-2xl max-w-md w-full shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200">
         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-          <h2 className="text-xl font-bold text-gray-900">Edit Word</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold text-gray-900">Edit Word</h2>
+            {!canEdit && (
+              <span className="flex items-center gap-1 text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
+                <Lock className="w-3 h-3" /> Read-only
+              </span>
+            )}
+          </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition">
             <X className="w-5 h-5" />
           </button>
@@ -108,7 +128,8 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
               lang="el"
               value={greekText}
               onChange={(e) => setGreekText(e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition font-serif text-lg"
+              disabled={!canEdit}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition font-serif text-lg disabled:opacity-60 disabled:cursor-not-allowed"
               placeholder="e.g., η γυναίκα"
             />
           </div>
@@ -120,7 +141,8 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
               lang="fr"
               value={frenchText}
               onChange={(e) => setFrenchText(e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+              disabled={!canEdit}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition disabled:opacity-60 disabled:cursor-not-allowed"
               placeholder="e.g., voter"
             />
           </div>
@@ -182,13 +204,14 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
             </div>
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide">Part of Speech</label>
-              <input
-                type="text"
+              <select
                 value={pos}
-                onChange={(e) => setPos(e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                placeholder="e.g., Verb"
-              />
+                onChange={(e) => setPos(e.target.value as PosValue)}
+                disabled={!canEdit}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {POS_VALUES.map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
             </div>
           </div>
 
@@ -197,7 +220,8 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
             <select
               value={difficulty}
               onChange={(e) => setDifficulty(e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
+              disabled={!canEdit}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <option value="easy">Easy (Top 1-1,000)</option>
               <option value="medium">Medium (1,001-3,000)</option>
@@ -213,20 +237,26 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
             >
               Cancel
             </button>
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="px-5 py-2.5 text-white font-semibold bg-blue-600 hover:bg-blue-700 rounded-lg transition flex items-center gap-2"
-            >
-              {isSaving ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save Changes"
-              )}
-            </button>
+            {canEdit ? (
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="px-5 py-2.5 text-white font-semibold bg-blue-600 hover:bg-blue-700 rounded-lg transition flex items-center gap-2"
+              >
+                {isSaving ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Changes"
+                )}
+              </button>
+            ) : (
+              <span className="flex items-center gap-1.5 text-sm text-gray-400">
+                <Lock className="w-4 h-4" /> Only the owner or an admin can edit this word
+              </span>
+            )}
           </div>
         </div>
       </div>

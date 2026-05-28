@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { getRankFromDifficulty } from "./EditWordModal";
+import { POS_VALUES, coercePos } from "@/lib/normalize";
 
 interface BatchEditModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ interface BatchEditModalProps {
 export function BatchEditModal({ isOpen, onClose, selectedWordIds, onSuccess }: BatchEditModalProps) {
   const [theme, setTheme] = useState("");
   const [difficulty, setDifficulty] = useState("");
+  const [pos, setPos] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   
   const [availableThemes, setAvailableThemes] = useState<string[]>([]);
@@ -26,6 +28,7 @@ export function BatchEditModal({ isOpen, onClose, selectedWordIds, onSuccess }: 
     if (isOpen) {
       setTheme("");
       setDifficulty("");
+      setPos("");
       supabase.from("words_dim").select("theme").not("theme", "is", null).neq("theme", "").then(({ data }) => {
         if (data) {
           setAvailableThemes(Array.from(new Set(data.map(d => d.theme))).sort() as string[]);
@@ -37,8 +40,8 @@ export function BatchEditModal({ isOpen, onClose, selectedWordIds, onSuccess }: 
   if (!isOpen || selectedWordIds.length === 0) return null;
 
   const handleSave = async () => {
-    if (!theme && !difficulty) {
-      toast.error("Please enter a new theme or difficulty to update.");
+    if (!theme && !difficulty && !pos) {
+      toast.error("Please enter a new theme, difficulty, or part of speech to update.");
       return;
     }
 
@@ -46,6 +49,7 @@ export function BatchEditModal({ isOpen, onClose, selectedWordIds, onSuccess }: 
     const updates: any = {};
     if (theme) updates.theme = theme.trim();
     if (difficulty) updates.frequency_rank = getRankFromDifficulty(difficulty);
+    if (pos) updates.part_of_speech = coercePos(pos);
 
     const { error, data } = await supabase
       .from("words_dim")
@@ -136,6 +140,18 @@ export function BatchEditModal({ isOpen, onClose, selectedWordIds, onSuccess }: 
                 );
               })()
             )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide">Part of Speech</label>
+            <select
+              value={pos}
+              onChange={(e) => setPos(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
+            >
+              <option value="">(Leave empty to keep current)</option>
+              {POS_VALUES.map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
           </div>
 
           <div>

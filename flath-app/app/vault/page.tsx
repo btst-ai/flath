@@ -9,17 +9,20 @@ import { Star, Trash2, UploadCloud, ChevronDown, ChevronUp, Plus, Archive, Arrow
 import { useAddWord, WordInput } from "@/hooks/useAddWord";
 import { ConflictResolutionModal } from "@/components/ConflictResolutionModal";
 import { EditWordModal, getDifficultyFromRank } from "@/components/EditWordModal";
-import { ImportSummaryModal } from "@/components/ImportSummaryModal";
+import { ImportSummaryModal, ImportedWord } from "@/components/ImportSummaryModal";
 import { BatchEditModal } from "@/components/BatchEditModal";
 import { PracticeSelectionModal } from "@/components/PracticeSelectionModal";
 import { useSurface, isMobileSurface } from "@/lib/surface";
-import { normalizeForSearch } from "@/lib/normalize";
+import { normalizeForSearch, coercePos } from "@/lib/normalize";
+import { loadFrequencyMap, extractLookupToken } from "@/lib/freqLookup";
+import { batchArchiveWords, batchDeleteWords } from "@/app/actions/words";
 
 interface CsvRow {
   "Greek Word"?: string;
   "French Translation"?: string;
   "Part of Speech"?: string;
   Group?: string;
+  "Frequency Rank"?: string;
   [key: string]: string | undefined;
 }
 
@@ -109,10 +112,9 @@ export default function VaultPage() {
   
   const [importSummary, setImportSummary] = useState<{
     isOpen: boolean;
-    total: number;
-    byTheme: Record<string, number>;
-    byDifficulty: Record<string, number>;
+    words: ImportedWord[];
   } | null>(null);
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -187,13 +189,34 @@ export default function VaultPage() {
         header: true,
         skipEmptyLines: true,
         complete: async (results) => {
-          const rows: WordInput[] = results.data
-            .map((row) => ({
-              greek_text: (row["Greek Word"] ?? "").trim(),
-              french_text: (row["French Translation"] ?? "").trim(),
-              part_of_speech: (row["Part of Speech"] ?? "").trim(),
-              theme: (row["Group"] ?? "").trim(),
-            }))
+          // Pre-load frequency map for "Matched" rows
+          let freqMap: Map<string, number> | null = null;
+          const hasMatchedRows = results.data.some(r => (r["Frequency Rank"] ?? "").trim().toLowerCase() === "matched");
+          if (hasMatchedRows) {
+            try { freqMap = await loadFrequencyMap(); } catch (e) { console.warn("Freq map load failed", e); }
+          }
+
+          const rows: (WordInput & { frequency_rank?: number })[] = results.data
+            .map((row) => {
+              const greekText = (row["Greek Word"] ?? "").trim();
+              const freqRankRaw = (row["Frequency Rank"] ?? "").trim().toLowerCase();
+
+              let frequency_rank: number | undefined;
+              if (freqRankRaw === "matched" && freqMap) {
+                const token = extractLookupToken(greekText);
+                frequency_rank = freqMap.get(token) ?? 8000;
+              } else if (freqRankRaw === "niche" || freqRankRaw === "") {
+                frequency_rank = 8000;
+              }
+
+              return {
+                greek_text: greekText,
+                french_text: (row["French Translation"] ?? "").trim(),
+                part_of_speech: coercePos((row["Part of Speech"] ?? "").trim()),
+                theme: (row["Group"] ?? "").trim() || "General",
+                frequency_rank,
+              };
+            })
             .filter((r) => r.greek_text);
 
           if (rows.length === 0) {
@@ -205,27 +228,25 @@ export default function VaultPage() {
           const result = await addWords(rows);
 
           if (result && result.stats && result.stats.length > 0) {
-            const byTheme: Record<string, number> = {};
-            const byDifficulty: Record<string, number> = {};
-            
-            result.stats.forEach((s: any) => {
-              const theme = s.theme || 'General';
-              byTheme[theme] = (byTheme[theme] || 0) + 1;
-              const diff = getDifficultyFromRank(s.frequency_rank);
-              byDifficulty[diff] = (byDifficulty[diff] || 0) + 1;
-            });
-            
+            // Build ImportedWord list from inserted stats (stats includes id + all fields)
+            const importedWords: ImportedWord[] = result.stats.map((s: any) => ({
+              id: s.id,
+              greek_text: s.greek_text || "",
+              french_text: s.french_text || "",
+              theme: s.theme || "General",
+              part_of_speech: s.part_of_speech || "Autre",
+              frequency_rank: s.frequency_rank || 8000,
+            }));
+
             setImportSummary({
               isOpen: true,
-              total: result.stats.length,
-              byTheme,
-              byDifficulty
+              words: importedWords,
             });
           }
 
           setFileName(null);
           if (fileInputRef.current) fileInputRef.current.value = "";
-          fetchVocab(); 
+          fetchVocab();
           setShowUploader(false);
           setIsUploading(false);
         },
@@ -296,6 +317,34 @@ export default function VaultPage() {
     };
     await addWords([wordInput]);
     fetchVocab();
+  };
+
+  const handleBatchArchive = async () => {
+    if (!userId || selectedWordIds.size === 0) return;
+    const ids = Array.from(selectedWordIds);
+    const result = await batchArchiveWords(userId, ids);
+    if ("error" in result) {
+      toast.error(`Archive failed: ${result.error}`);
+    } else {
+      toast.success(`${ids.length} word(s) archived.`);
+      setSelectedWordIds(new Set());
+      fetchVocab();
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (!userId || selectedWordIds.size === 0) return;
+    const ids = Array.from(selectedWordIds);
+    const result = await batchDeleteWords(userId, ids);
+    setShowBatchDeleteConfirm(false);
+    if ("error" in result) {
+      toast.error(`Delete failed: ${result.error}`);
+    } else {
+      if (result.ownedDeleted > 0) toast.success(`${result.ownedDeleted} word(s) permanently deleted.`);
+      if (result.removedFromLibrary > 0) toast.info(`${result.removedFromLibrary} word(s) removed from your library.`);
+      setSelectedWordIds(new Set());
+      fetchVocab();
+    }
   };
 
   const addSelectedToMyLibrary = async () => {
@@ -732,12 +781,11 @@ export default function VaultPage() {
         />
       )}
       {importSummary && (
-        <ImportSummaryModal 
+        <ImportSummaryModal
           isOpen={importSummary.isOpen}
           onClose={() => setImportSummary(null)}
-          total={importSummary.total}
-          byTheme={importSummary.byTheme}
-          byDifficulty={importSummary.byDifficulty}
+          words={importSummary.words}
+          onRefresh={fetchVocab}
         />
       )}
       <PracticeSelectionModal 
@@ -745,6 +793,32 @@ export default function VaultPage() {
         onClose={() => setShowPracticeModal(false)} 
         userId={userId || ""} 
       />
+      {/* Batch delete confirm dialog — desktop-only, see flath-app/CLAUDE.md */}
+      {showBatchDeleteConfirm && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full shadow-xl p-6 space-y-4">
+            <h3 className="text-lg font-bold text-gray-900">Delete {selectedWordIds.size} word(s)?</h3>
+            <p className="text-sm text-gray-600">
+              Words you own will be permanently deleted. Words added by others will be removed from your library only.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowBatchDeleteConfirm(false)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBatchDelete}
+                className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="w-full max-w-6xl flex flex-col h-full">
         <div className="shrink-0 flex flex-col">
           <div className="flex items-center justify-between mb-6">
@@ -805,8 +879,9 @@ export default function VaultPage() {
                  <ul className="list-disc list-inside ml-4 mt-1 space-y-0.5">
                    <li><strong>Greek Word</strong> (required)</li>
                    <li><strong>French Translation</strong></li>
-                   <li><strong>Part of Speech</strong></li>
-                   <li><strong>Group</strong> (this will become the Theme)</li>
+                   <li><strong>Part of Speech</strong> — optional, defaults to &ldquo;Autre&rdquo;</li>
+                   <li><strong>Group</strong> — optional, becomes the Theme (default: &ldquo;General&rdquo;)</li>
+                   <li><strong>Frequency Rank</strong> — optional: &ldquo;Matched&rdquo; (lookup from frequency list) or &ldquo;Niche&rdquo; (default)</li>
                  </ul>
                </div>
                <div
@@ -1128,6 +1203,20 @@ export default function VaultPage() {
                 >
                   Batch Edit ({selectedWordIds.size})
                 </button>
+                {/* desktop-only — see flath-app/CLAUDE.md */}
+                <button
+                  onClick={handleBatchArchive}
+                  className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-md text-sm font-medium hover:bg-orange-200 transition shadow"
+                >
+                  Archive ({selectedWordIds.size})
+                </button>
+                {/* desktop-only — see flath-app/CLAUDE.md */}
+                <button
+                  onClick={() => setShowBatchDeleteConfirm(true)}
+                  className="px-3 py-1.5 bg-red-100 text-red-700 rounded-md text-sm font-medium hover:bg-red-200 transition shadow"
+                >
+                  Delete ({selectedWordIds.size})
+                </button>
                 <button
                   onClick={handleCreatePackFromSelection}
                   className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition shadow"
@@ -1156,7 +1245,7 @@ export default function VaultPage() {
                   onClick={addSelectedToMyLibrary}
                   className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition"
                 >
-                  Add {selectedWordIds.size} to My Library
+                  Move {selectedWordIds.size} to My Library
                 </button>
               </>
             )}
@@ -1357,10 +1446,10 @@ export default function VaultPage() {
                         <td className="px-4 py-3 text-center">
                           <button
                             onClick={() => addToMyLibrary(vocab)}
-                            className="p-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition"
-                            title="Add to My Library"
+                            className="px-2.5 py-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition text-xs font-medium flex items-center gap-1 whitespace-nowrap"
+                            title="Move to My Library"
                           >
-                            <Plus className="w-4 h-4" />
+                            <Plus className="w-3.5 h-3.5" /> My Library
                           </button>
                         </td>
                       </tr>

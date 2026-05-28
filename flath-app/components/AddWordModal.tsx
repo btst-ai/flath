@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAddWord } from "@/hooks/useAddWord";
 import { ConflictResolutionModal } from "@/components/ConflictResolutionModal";
+import { POS_VALUES } from "@/lib/normalize";
 
 interface AddWordModalProps {
   isOpen: boolean;
@@ -15,7 +16,7 @@ export function AddWordModal({ isOpen, onClose }: AddWordModalProps) {
   const [greekText, setGreekText] = useState("");
   const [frenchText, setFrenchText] = useState("");
   const [theme, setTheme] = useState("General");
-  const [pos, setPos] = useState("");
+  const [pos, setPos] = useState("Nom");
   const [difficulty, setDifficulty] = useState("medium");
 
   const [availableThemes, setAvailableThemes] = useState<string[]>([]);
@@ -38,7 +39,7 @@ export function AddWordModal({ isOpen, onClose }: AddWordModalProps) {
     setGreekText("");
     setFrenchText("");
     setTheme("General");
-    setPos("");
+    setPos("Nom");
     setDifficulty("medium");
     onClose();
   };
@@ -143,13 +144,13 @@ export function AddWordModal({ isOpen, onClose }: AddWordModalProps) {
               </div>
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide">Part of Speech</label>
-                <input
-                  type="text"
+                <select
                   value={pos}
                   onChange={(e) => setPos(e.target.value)}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                  placeholder="e.g., Verb"
-                />
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
+                >
+                  {POS_VALUES.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
               </div>
             </div>
 
