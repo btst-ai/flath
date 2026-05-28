@@ -477,8 +477,8 @@ function PracticeSession() {
   const diffColor = difficultyColors[difficulty as keyof typeof difficultyColors] || "bg-gray-100 text-gray-700";
 
   const knownCount = masteredCount;
-  const notSeenCount = Math.max(0, totalSessionSize - seenWordIds.size - knownCount);
-  const retryCount = Math.max(0, queue.length - (notSeenCount));
+  const retryCount = queue.filter(w => seenWordIds.has(w.word_id)).length;
+  const notSeenCount = queue.length - retryCount;
 
   const progressPill = (
     <div className="flex items-center gap-3">
@@ -521,15 +521,11 @@ function PracticeSession() {
       {/* Mobile controls: stats pill + end button stacked */}
       <div className="md:hidden flex flex-col gap-2 w-full mb-3">
         <div className="w-full flex items-center justify-center gap-4 bg-white px-4 py-3 rounded-full border border-gray-200 shadow-sm font-semibold text-gray-700">
-          {!isLocked && (
-            <>
-              <div className="flex items-center gap-2">
-                <span className="text-gray-400">⏱</span>
-                <span className="w-12 text-center font-mono">{formatTime(elapsedSeconds)}</span>
-              </div>
-              <div className="w-px h-4 bg-gray-300" />
-            </>
-          )}
+          <div className={`flex items-center gap-2 ${isLocked ? 'text-white' : ''}`}>
+            <span className={isLocked ? 'text-white' : 'text-gray-400'}>⏱</span>
+            <span className="w-12 text-center font-mono">{formatTime(elapsedSeconds)}</span>
+          </div>
+          <div className={`w-px h-4 ${isLocked ? 'bg-white' : 'bg-gray-300'}`} />
           {progressPill}
         </div>
         <div className="flex justify-center">
@@ -546,15 +542,11 @@ function PracticeSession() {
       {/* Desktop controls: stats + end side by side, no back arrow */}
       <div className="hidden md:flex w-full max-w-2xl items-center justify-between gap-2 mb-8 mt-4">
         <div className="flex items-center gap-6 bg-white px-6 py-3 rounded-full border border-gray-200 shadow-sm font-semibold text-gray-700">
-          {!isLocked && (
-            <>
-              <div className="flex items-center gap-2">
-                <span className="text-gray-400">⏱</span>
-                <span className="w-12 text-center font-mono">{formatTime(elapsedSeconds)}</span>
-              </div>
-              <div className="w-px h-4 bg-gray-300" />
-            </>
-          )}
+          <div className={`flex items-center gap-2 ${isLocked ? 'text-white' : ''}`}>
+            <span className={isLocked ? 'text-white' : 'text-gray-400'}>⏱</span>
+            <span className="w-12 text-center font-mono">{formatTime(elapsedSeconds)}</span>
+          </div>
+          <div className={`w-px h-4 ${isLocked ? 'bg-white' : 'bg-gray-300'}`} />
           {progressPill}
         </div>
         <button
@@ -730,11 +722,11 @@ function PracticeSession() {
         )}
 
         {/* Action Buttons */}
-        <div className={`flex-[3] md:flex-none md:mt-12 flex items-center justify-center gap-4 transition-all duration-300 ${showIterationSplash || isLocked ? 'opacity-0 pointer-events-none' : ''} ${flipped ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+        <div className={`flex-[3] md:flex-none md:mt-12 flex items-center justify-center gap-4 transition-all duration-300 ${showIterationSplash || !flipped ? 'opacity-0 pointer-events-none' : isLocked ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
           <button
             onClick={(e) => { e.stopPropagation(); handleAction("forgot"); }}
             disabled={isLocked}
-            className="flex flex-col items-center justify-center w-24 h-24 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition shadow-sm disabled:opacity-100"
+            className="flex flex-col items-center justify-center w-24 h-24 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition shadow-sm"
           >
             <X className="w-8 h-8 mb-1" />
             <span className="text-xs font-bold uppercase tracking-wider">Forgot</span>
@@ -743,7 +735,7 @@ function PracticeSession() {
           <button
             onClick={(e) => { e.stopPropagation(); handleAction("meh"); }}
             disabled={isLocked}
-            className="flex flex-col items-center justify-center w-24 h-24 rounded-full bg-yellow-100 text-yellow-600 hover:bg-yellow-200 transition shadow-sm disabled:opacity-100"
+            className="flex flex-col items-center justify-center w-24 h-24 rounded-full bg-yellow-100 text-yellow-600 hover:bg-yellow-200 transition shadow-sm"
           >
             <HelpCircle className="w-8 h-8 mb-1" />
             <span className="text-xs font-bold uppercase tracking-wider">Unsure</span>
@@ -752,7 +744,7 @@ function PracticeSession() {
           <button
             onClick={(e) => { e.stopPropagation(); handleAction("know"); }}
             disabled={isLocked}
-            className="flex flex-col items-center justify-center w-24 h-24 rounded-full bg-green-100 text-green-600 hover:bg-green-200 transition shadow-sm disabled:opacity-100"
+            className="flex flex-col items-center justify-center w-24 h-24 rounded-full bg-green-100 text-green-600 hover:bg-green-200 transition shadow-sm"
           >
             <Check className="w-8 h-8 mb-1" />
             <span className="text-xs font-bold uppercase tracking-wider">Knew It</span>
