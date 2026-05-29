@@ -121,11 +121,15 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
         </div>
 
         <div className="p-6 space-y-4">
-          <div>
+          <div lang="el">
             <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide">Greek Word</label>
             <input
               type="text"
               lang="el"
+              inputMode="text"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               value={greekText}
               onChange={(e) => setGreekText(e.target.value)}
               disabled={!canEdit}

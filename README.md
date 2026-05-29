@@ -122,6 +122,19 @@ This prints the current PoS distribution and lists any rows that would be rewrit
 
 ## Changelog
 
+### Phase 3.3 — Vault tweaks and mobile input fixes (May 2026)
+
+**Bug fixes**
+- Fixed infinite re-fetch loop when launching a review session from the vault ("Review this" button). The practice page's `fetchSessionData` callback was regenerating on every render due to an unstable `wordIds` array dependency, causing the loading state to toggle perpetually. Now removes the duplicate array derivation and stabilizes the callback dependencies so data fetches once per session load.
+- Fixed unreadable (light grey) text in Add/Edit Word modals on dark-mode Android devices. Root cause: leftover Next.js dark-mode boilerplate in `globals.css` was flipping body text to `#ededed` on OS dark mode while the modals stayed `bg-white`. Removed the `@media (prefers-color-scheme: dark)` block — the app is light-only and has no dark-mode design.
+- Greek Word field in Add/Edit modals now suppresses auto-capitalize and auto-correct (`autoCapitalize="none"`, `autoCorrect="off"`, `spellCheck={false}`). Also strengthened `lang="el"` scoping to container level to improve Gboard keyboard-language detection on Android.
+
+**Vault**
+- "Review this" limit reduced from 50 to 25 words.
+- "Practice Selected" button renamed to "Other Practice".
+
+---
+
 ### Phase 3.2 — Mobile polish, safety caps, and vault temporal filter (May 2026)
 
 **Mobile surface**
@@ -129,7 +142,7 @@ This prints the current PoS distribution and lists any rows that would be rewrit
 - "Practice Selected" button hidden on mobile — requires checkbox row-selection which is already desktop-only.
 
 **Vault improvements**
-- "Review this" cap raised from 20 to 50 words.
+- "Review this" cap raised from 20 to 50 words (later reduced to 25 in Phase 3.3).
 - Theme autocomplete in Add/Edit word modals is now accent-insensitive (uses `normalizeForSearch()` — same NFD normalization as vault search).
 - Temporal filter redesigned: replaces the fixed Today/Week/Month buttons with a free-form `[field] [in the last | more than] [X] days` control. Supported fields: Last reviewed, Last correct, Last mistake, Added.
 

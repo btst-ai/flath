@@ -783,14 +783,14 @@ export default function VaultPage() {
   };
 
   const startReviewTopDisplayed = () => {
-    const ids = displayedLibrary.slice(0, 50).map((w) => w.word_id);
+    const ids = displayedLibrary.slice(0, 25).map((w) => w.word_id);
     if (ids.length === 0) {
       toast.error("No words to review with the current filters.");
       return;
     }
     const qs = new URLSearchParams({
       word_ids: ids.join(","),
-      limit: "50",
+      limit: "25",
       preserve_order: "1",
     });
     router.push(`/practice?${qs.toString()}`);
@@ -896,7 +896,7 @@ export default function VaultPage() {
               onClick={() => setShowPracticeModal(true)}
               className="px-4 py-2 bg-green-600 text-white rounded-lg font-semibold shadow hover:bg-green-700 transition"
             >
-              Practice Selected
+              Other Practice
             </button>
             )}
             <button

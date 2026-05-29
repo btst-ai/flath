@@ -73,12 +73,16 @@ export function AddWordModal({ isOpen, onClose }: AddWordModalProps) {
           </div>
 
           <div className="p-6 space-y-4">
-            <div>
+            <div lang="el">
               <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide">Greek Word *</label>
               <input
                 autoFocus
                 type="text"
                 lang="el"
+                inputMode="text"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 value={greekText}
                 onChange={(e) => setGreekText(e.target.value)}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition font-serif text-lg"

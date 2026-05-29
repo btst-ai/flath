@@ -24,7 +24,6 @@ function PracticeSession() {
   const searchParams = useSearchParams();
   const packId = searchParams.get("pack_id");
   const wordIdsParam = searchParams.get("word_ids");
-  const wordIds = wordIdsParam ? wordIdsParam.split(",").filter(Boolean) : null;
   const mode = searchParams.get("mode");
   const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "25", 10)));
   const preserveOrder =
@@ -122,7 +121,7 @@ function PracticeSession() {
       words = await fetchUserWords(
         userId,
         packId,
-        idsFromParam.length > 0 ? idsFromParam : wordIds,
+        idsFromParam.length > 0 ? idsFromParam : null,
       );
     }
 
@@ -170,7 +169,7 @@ function PracticeSession() {
     setFirstAttemptOutcome({});
     setSessionStartTs(new Date().toISOString());
     setIsLoading(false);
-  }, [userId, packId, wordIdsParam, mode, limit, preserveOrder, excludeSuccessful, excludeReviewedToday, wordIds]);
+  }, [userId, packId, wordIdsParam, mode, limit, preserveOrder, excludeSuccessful, excludeReviewedToday]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data, error }) => {
