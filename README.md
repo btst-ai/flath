@@ -122,6 +122,18 @@ This prints the current PoS distribution and lists any rows that would be rewrit
 
 ## Changelog
 
+### Phase 3.4 — Practice pill redesign and Add Word UX (May 2026)
+
+**Practice**
+- Progress pill now shows 4 emoji counters: 🟢 Mastered / 🟡 Unsure (meh, still in queue) / 🔴 Forgot (still in queue) / ⚫ Not seen yet. Previously "meh" and "forgot" were merged into a single red counter.
+- "Review #N" merged into the End Session button as a split pill (iteration label on the left, stop icon + label on the right). Frees up space in the stats bar.
+
+**Add Word modal**
+- French translation field now auto-lowercases input as you type.
+- Theme/Group field no longer pre-fills with "General" — shows it as a greyed placeholder instead. Submitting without a value still saves as "General".
+
+---
+
 ### Phase 3.3 — Vault tweaks and mobile input fixes (May 2026)
 
 **Bug fixes**

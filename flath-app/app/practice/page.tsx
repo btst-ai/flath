@@ -61,6 +61,7 @@ function PracticeSession() {
 
   // Phase 3: progress tracking
   const [seenWordIds, setSeenWordIds] = useState<Set<string>>(new Set());
+  const [mehWordIds, setMehWordIds] = useState<Set<string>>(new Set());
   const [iteration, setIteration] = useState(1);
   const [showIterationSplash, setShowIterationSplash] = useState(false);
   const [passStartIds, setPassStartIds] = useState<string[]>([]);
@@ -219,6 +220,12 @@ function PracticeSession() {
     // Track first-attempt outcome per word this session
     setFirstAttemptOutcome(prev => prev[currentWord.word_id] ? prev : { ...prev, [currentWord.word_id]: outcome });
     setSeenWordIds(prev => prev.has(currentWord.word_id) ? prev : new Set(prev).add(currentWord.word_id));
+    setMehWordIds(prev => {
+      const next = new Set(prev);
+      if (outcome === 'meh') next.add(currentWord.word_id);
+      else next.delete(currentWord.word_id);
+      return next;
+    });
 
     setCurrentInterestToggle("none");
 
@@ -267,6 +274,7 @@ function PracticeSession() {
       setTimeout(() => {
         setQueue(prev => prev.slice(1));
         setMasteredCount(c => c + 1);
+        setMehWordIds(prev => { const next = new Set(prev); next.delete(currentWord.word_id); return next; });
         // Iteration: if we just removed the last id of the current pass, bump
         setPassStartIds(passIds => {
           if (passIds.length === 0) return passIds;
@@ -476,8 +484,9 @@ function PracticeSession() {
   const diffColor = difficultyColors[difficulty as keyof typeof difficultyColors] || "bg-gray-100 text-gray-700";
 
   const knownCount = masteredCount;
-  const retryCount = queue.filter(w => seenWordIds.has(w.word_id)).length;
-  const notSeenCount = queue.length - retryCount;
+  const notSeenCount = queue.filter(w => !seenWordIds.has(w.word_id)).length;
+  const mehCount = queue.filter(w => mehWordIds.has(w.word_id)).length;
+  const forgotCount = queue.filter(w => seenWordIds.has(w.word_id) && !mehWordIds.has(w.word_id)).length;
 
   const progressPill = (
     <div className="flex items-center gap-3">
@@ -487,14 +496,16 @@ function PracticeSession() {
       </span>
       <span className="flex items-center gap-1.5">
         <span className="text-sm">🟡</span>
-        <span className="font-mono">{notSeenCount}</span>
+        <span className="font-mono">{mehCount}</span>
       </span>
       <span className="flex items-center gap-1.5">
         <span className="text-sm">🔴</span>
-        <span className="font-mono">{retryCount}</span>
+        <span className="font-mono">{forgotCount}</span>
       </span>
-      <span className="w-px h-4 bg-gray-300" />
-      <span className="text-xs uppercase tracking-wide text-gray-500">Review #{iteration}</span>
+      <span className="flex items-center gap-1.5">
+        <span className="text-sm">⚫</span>
+        <span className="font-mono">{notSeenCount}</span>
+      </span>
     </div>
   );
 
@@ -530,10 +541,13 @@ function PracticeSession() {
         <div className="flex justify-center">
           <button
             onClick={() => handleEndSession(false)}
-            className="flex items-center gap-2 px-8 py-2.5 bg-white border border-gray-200 shadow-sm text-red-500 hover:bg-red-50 rounded-full transition font-medium text-sm"
+            className="flex items-center bg-white border border-gray-200 shadow-sm rounded-full overflow-hidden transition hover:bg-red-50 font-medium text-sm"
           >
-            <StopCircle className="w-4 h-4" />
-            End practice
+            <span className="px-4 py-2.5 text-gray-500 border-r border-gray-200">Review #{iteration}</span>
+            <span className="flex items-center gap-2 px-4 py-2.5 text-red-500">
+              <StopCircle className="w-4 h-4" />
+              End practice
+            </span>
           </button>
         </div>
       </div>
@@ -550,10 +564,13 @@ function PracticeSession() {
         </div>
         <button
           onClick={() => handleEndSession(false)}
-          className="flex items-center gap-1 px-4 py-2 bg-white border border-gray-200 shadow-sm text-red-500 hover:bg-red-50 rounded-full transition font-medium text-sm"
+          className="flex items-center bg-white border border-gray-200 shadow-sm rounded-full overflow-hidden transition hover:bg-red-50 font-medium text-sm"
         >
-          <StopCircle className="w-5 h-5" />
-          End Session
+          <span className="px-4 py-2 text-gray-500 border-r border-gray-200">Review #{iteration}</span>
+          <span className="flex items-center gap-1.5 px-4 py-2 text-red-500">
+            <StopCircle className="w-4 h-4" />
+            End Session
+          </span>
         </button>
       </div>
 

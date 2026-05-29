@@ -15,7 +15,7 @@ interface AddWordModalProps {
 export function AddWordModal({ isOpen, onClose }: AddWordModalProps) {
   const [greekText, setGreekText] = useState("");
   const [frenchText, setFrenchText] = useState("");
-  const [theme, setTheme] = useState("General");
+  const [theme, setTheme] = useState("");
   const [pos, setPos] = useState("Nom");
   const [difficulty, setDifficulty] = useState("medium");
 
@@ -38,7 +38,7 @@ export function AddWordModal({ isOpen, onClose }: AddWordModalProps) {
   const handleClose = () => {
     setGreekText("");
     setFrenchText("");
-    setTheme("General");
+    setTheme("");
     setPos("Nom");
     setDifficulty("medium");
     onClose();
@@ -96,7 +96,7 @@ export function AddWordModal({ isOpen, onClose }: AddWordModalProps) {
                 type="text"
                 lang="fr"
                 value={frenchText}
-                onChange={(e) => setFrenchText(e.target.value)}
+                onChange={(e) => setFrenchText(e.target.value.toLowerCase())}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                 placeholder="e.g., la femme"
               />
@@ -126,7 +126,7 @@ export function AddWordModal({ isOpen, onClose }: AddWordModalProps) {
                     }
                   }}
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                  placeholder="e.g., General"
+                  placeholder="General"
                 />
                 {showThemeSuggestions && themeSuggestions.length > 0 && (
                   <ul className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
