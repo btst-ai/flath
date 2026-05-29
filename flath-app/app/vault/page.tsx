@@ -40,6 +40,7 @@ export default function VaultPage() {
   // Surface gating — CSV import + batch-edit are desktop-only. See flath-app/CLAUDE.md.
   const surface = useSurface();
   const showDesktopOnly = !isMobileSurface(surface);
+  const isMobile = isMobileSurface(surface); // mobile-only background — see flath-app/CLAUDE.md
 
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -70,8 +71,9 @@ export default function VaultPage() {
   const [filterStatus, setFilterStatus] = useState<"all" | "fav">("all");
   const [filterPOS, setFilterPOS] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterLastReviewed, setFilterLastReviewed] = useState<"today" | "week" | "month" | null>(null);
-  const [filterLastReviewedMode, setFilterLastReviewedMode] = useState<"less_than" | "more_than">("less_than");
+  const [filterTemporalField, setFilterTemporalField] = useState<"last_reviewed" | "last_correct_at" | "last_mistake_at" | "added" | null>(null);
+  const [filterTemporalDays, setFilterTemporalDays] = useState<number | "">("");
+  const [filterTemporalMode, setFilterTemporalMode] = useState<"less_than" | "more_than">("less_than");
   const [filterHeat, setFilterHeat] = useState<"hot" | "warm" | "cold" | null>(null);
   const [filterExcludeSuccessful, setFilterExcludeSuccessful] = useState(false);
   const [masteredIds, setMasteredIds] = useState<Set<string>>(new Set());
@@ -88,7 +90,7 @@ export default function VaultPage() {
   // Reset visible count when filters or sorting change
   useEffect(() => {
     setVisibleCount(50);
-  }, [activeTab, sortField, sortDirection, filterTheme, filterSuccessMin, filterSuccessMax, filterFreqMin, filterFreqMax, filterReviewMin, filterReviewMax, filterStatus, searchQuery, filterPOS, filterLastReviewed, filterLastReviewedMode, filterHeat, filterExcludeSuccessful]);
+  }, [activeTab, sortField, sortDirection, filterTheme, filterSuccessMin, filterSuccessMax, filterFreqMin, filterFreqMax, filterReviewMin, filterReviewMax, filterStatus, searchQuery, filterPOS, filterTemporalField, filterTemporalDays, filterTemporalMode, filterHeat, filterExcludeSuccessful]);
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
@@ -453,15 +455,19 @@ export default function VaultPage() {
     if (filterReviewMax !== "") {
       data = data.filter(item => (item.review_count || 0) <= filterReviewMax);
     }
-    if (filterLastReviewed) {
-      const now = new Date();
-      const days = filterLastReviewed === "today" ? 1 : filterLastReviewed === "week" ? 7 : 30;
-      const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-      if (filterLastReviewedMode === "less_than") {
-        data = data.filter(item => item.last_reviewed && new Date(item.last_reviewed) >= cutoff);
-      } else {
-        data = data.filter(item => !item.last_reviewed || new Date(item.last_reviewed) < cutoff);
-      }
+    if (filterTemporalField && filterTemporalDays !== "") {
+      const cutoff = new Date(Date.now() - (filterTemporalDays as number) * 24 * 60 * 60 * 1000);
+      data = data.filter(item => {
+        const raw = filterTemporalField === "last_reviewed" ? item.last_reviewed
+          : filterTemporalField === "last_correct_at" ? item.last_correct_at
+          : filterTemporalField === "last_mistake_at" ? item.last_mistake_at
+          : item.words_dim?.created_at;
+        if (filterTemporalMode === "less_than") {
+          return raw && new Date(raw) >= cutoff;
+        } else {
+          return !raw || new Date(raw) < cutoff;
+        }
+      });
     }
     if (filterHeat) {
       data = data.filter(item => {
@@ -529,7 +535,7 @@ export default function VaultPage() {
       if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
       return 0;
     });
-  }, [myLibrary, sortField, sortDirection, filterTheme, filterSuccessMin, filterSuccessMax, filterFreqMin, filterFreqMax, filterReviewMin, filterReviewMax, filterStatus, searchQuery, filterPOS, filterLastReviewed, filterLastReviewedMode, filterHeat, filterExcludeSuccessful, masteredIds]);
+  }, [myLibrary, sortField, sortDirection, filterTheme, filterSuccessMin, filterSuccessMax, filterFreqMin, filterFreqMax, filterReviewMin, filterReviewMax, filterStatus, searchQuery, filterPOS, filterTemporalField, filterTemporalDays, filterTemporalMode, filterHeat, filterExcludeSuccessful, masteredIds]);
 
   const displayedRemoved = useMemo(() => {
     let data = myLibrary.filter(w => w.is_archived);
@@ -574,15 +580,19 @@ export default function VaultPage() {
     if (filterReviewMax !== "") {
       data = data.filter(item => (item.review_count || 0) <= filterReviewMax);
     }
-    if (filterLastReviewed) {
-      const now = new Date();
-      const days = filterLastReviewed === "today" ? 1 : filterLastReviewed === "week" ? 7 : 30;
-      const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-      if (filterLastReviewedMode === "less_than") {
-        data = data.filter(item => item.last_reviewed && new Date(item.last_reviewed) >= cutoff);
-      } else {
-        data = data.filter(item => !item.last_reviewed || new Date(item.last_reviewed) < cutoff);
-      }
+    if (filterTemporalField && filterTemporalDays !== "") {
+      const cutoff = new Date(Date.now() - (filterTemporalDays as number) * 24 * 60 * 60 * 1000);
+      data = data.filter(item => {
+        const raw = filterTemporalField === "last_reviewed" ? item.last_reviewed
+          : filterTemporalField === "last_correct_at" ? item.last_correct_at
+          : filterTemporalField === "last_mistake_at" ? item.last_mistake_at
+          : item.words_dim?.created_at;
+        if (filterTemporalMode === "less_than") {
+          return raw && new Date(raw) >= cutoff;
+        } else {
+          return !raw || new Date(raw) < cutoff;
+        }
+      });
     }
     if (filterHeat) {
       data = data.filter(item => {
@@ -650,7 +660,7 @@ export default function VaultPage() {
       if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
       return 0;
     });
-  }, [myLibrary, sortField, sortDirection, filterTheme, filterSuccessMin, filterSuccessMax, filterFreqMin, filterFreqMax, filterReviewMin, filterReviewMax, filterStatus, searchQuery, filterPOS, filterLastReviewed, filterLastReviewedMode, filterHeat, filterExcludeSuccessful, masteredIds]);
+  }, [myLibrary, sortField, sortDirection, filterTheme, filterSuccessMin, filterSuccessMax, filterFreqMin, filterFreqMax, filterReviewMin, filterReviewMax, filterStatus, searchQuery, filterPOS, filterTemporalField, filterTemporalDays, filterTemporalMode, filterHeat, filterExcludeSuccessful, masteredIds]);
 
   const displayedOthers = useMemo(() => {
     let data = othersLibrary;
@@ -773,14 +783,14 @@ export default function VaultPage() {
   };
 
   const startReviewTopDisplayed = () => {
-    const ids = displayedLibrary.slice(0, 20).map((w) => w.word_id);
+    const ids = displayedLibrary.slice(0, 50).map((w) => w.word_id);
     if (ids.length === 0) {
       toast.error("No words to review with the current filters.");
       return;
     }
     const qs = new URLSearchParams({
       word_ids: ids.join(","),
-      limit: "20",
+      limit: "50",
       preserve_order: "1",
     });
     router.push(`/practice?${qs.toString()}`);
@@ -788,14 +798,14 @@ export default function VaultPage() {
 
   if (isAuthChecking) {
     return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <main className={`min-h-screen ${isMobile ? "bg-[#71B2F4]" : "bg-gray-50"} flex items-center justify-center`}>
         <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen md:h-screen md:overflow-hidden p-4 md:p-6 md:pb-0 flex flex-col items-center">
+    <main className={`min-h-screen md:h-screen md:overflow-hidden p-4 md:p-6 md:pb-0 flex flex-col items-center ${isMobile ? "bg-[#71B2F4]" : ""}`}>
       <ConflictResolutionModal {...conflictState} />
       <EditWordModal 
         isOpen={!!editingWord}
@@ -879,6 +889,8 @@ export default function VaultPage() {
                 Review this
               </button>
             )}
+            {/* desktop-only — see flath-app/CLAUDE.md */}
+            {showDesktopOnly && (
             <button
               type="button"
               onClick={() => setShowPracticeModal(true)}
@@ -886,6 +898,7 @@ export default function VaultPage() {
             >
               Practice Selected
             </button>
+            )}
             <button
               type="button"
               onClick={() => router.push("/")}
@@ -1120,35 +1133,38 @@ export default function VaultPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Last Reviewed</label>
-                  <div className="flex flex-col gap-1">
-                    <div className="flex gap-1">
-                      {(["today", "week", "month"] as const).map(period => (
-                        <button
-                          key={period}
-                          onClick={() => setFilterLastReviewed(filterLastReviewed === period ? null : period)}
-                          className={`px-2 py-1 rounded text-xs font-medium border transition ${filterLastReviewed === period ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"}`}
-                        >
-                          {period === "today" ? "Today" : period === "week" ? "This Week" : "This Month"}
-                        </button>
-                      ))}
-                    </div>
-                    {filterLastReviewed && (
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => setFilterLastReviewedMode("less_than")}
-                          className={`px-2 py-1 rounded text-xs font-medium border transition ${filterLastReviewedMode === "less_than" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 border-gray-300 hover:border-indigo-400"}`}
-                        >
-                          Reviewed within
-                        </button>
-                        <button
-                          onClick={() => setFilterLastReviewedMode("more_than")}
-                          className={`px-2 py-1 rounded text-xs font-medium border transition ${filterLastReviewedMode === "more_than" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 border-gray-300 hover:border-indigo-400"}`}
-                        >
-                          Not reviewed within
-                        </button>
-                      </div>
-                    )}
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Temporal Filter</label>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <select
+                      value={filterTemporalField ?? ""}
+                      onChange={e => setFilterTemporalField((e.target.value || null) as typeof filterTemporalField)}
+                      className="border border-gray-300 rounded p-1.5 text-xs"
+                    >
+                      <option value="">— field —</option>
+                      <option value="last_reviewed">Last reviewed</option>
+                      <option value="last_correct_at">Last correct</option>
+                      <option value="last_mistake_at">Last mistake</option>
+                      <option value="added">Added</option>
+                    </select>
+                    <select
+                      value={filterTemporalMode}
+                      onChange={e => setFilterTemporalMode(e.target.value as typeof filterTemporalMode)}
+                      className="border border-gray-300 rounded p-1.5 text-xs"
+                      disabled={!filterTemporalField}
+                    >
+                      <option value="less_than">in the last</option>
+                      <option value="more_than">more than</option>
+                    </select>
+                    <input
+                      type="number"
+                      min={1}
+                      value={filterTemporalDays}
+                      onChange={e => setFilterTemporalDays(e.target.value ? Number(e.target.value) : "")}
+                      placeholder="X"
+                      disabled={!filterTemporalField}
+                      className="border border-gray-300 rounded p-1.5 text-xs w-14"
+                    />
+                    <span className="text-xs text-gray-500">days</span>
                   </div>
                 </div>
 
@@ -1203,7 +1219,7 @@ export default function VaultPage() {
                 setFilterTheme(""); setFilterSuccessMin(""); setFilterSuccessMax("");
                 setFilterFreqMin(""); setFilterFreqMax(""); setFilterReviewMin(""); setFilterReviewMax("");
                 setFilterStatus("all"); setSearchQuery(""); setFilterPOS("");
-                setFilterLastReviewed(null); setFilterLastReviewedMode("less_than"); setFilterHeat(null);
+                setFilterTemporalField(null); setFilterTemporalDays(""); setFilterTemporalMode("less_than"); setFilterHeat(null);
                 setFilterExcludeSuccessful(false);
                 setSortField("smart"); setSortDirection("asc");
               }}

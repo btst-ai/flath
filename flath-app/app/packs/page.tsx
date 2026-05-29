@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { useSurface, isMobileSurface } from "@/lib/surface";
 import { toast } from "sonner";
 import { Folder, Play, Plus, X, Star, Settings, Edit, Trash2, ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react";
 import { getDifficultyFromRank } from "@/components/EditWordModal";
@@ -28,6 +29,8 @@ const getPackColorStyle = (packId: string, avgHeat: number) => {
 
 export default function PacksPage() {
   const router = useRouter();
+  const surface = useSurface();
+  const isMobile = isMobileSurface(surface); // mobile-only — see flath-app/CLAUDE.md
 
   useEffect(() => {
     document.body.classList.add("hide-background");
@@ -316,10 +319,10 @@ export default function PacksPage() {
     });
   }, [packs, sortField, sortDirection, filterSuccessMin, filterSuccessMax, filterHeatMin, filterHeatMax, filterDifficulty, filterLastPlayed]);
 
-  if (isAuthChecking) return <div className="min-h-screen bg-gray-50" />;
+  if (isAuthChecking) return <div className={`min-h-screen ${isMobile ? "bg-[#71B2F4]" : "bg-gray-50"}`} />;
 
   return (
-    <main className="min-h-screen bg-gray-50 p-6 flex flex-col items-center">
+    <main className={`min-h-screen ${isMobile ? "bg-[#71B2F4]" : "bg-gray-50"} p-6 flex flex-col items-center`}>
       <EditPackModal 
         isOpen={!!editingPack} 
         onClose={() => setEditingPack(null)} 

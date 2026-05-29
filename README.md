@@ -87,7 +87,9 @@ Auto-deploys on every push to `main`.
 
 One codebase, two presentations. A `useSurface()` hook (`flath-app/lib/surface.ts`) detects at runtime whether the user is on desktop, mobile browser, or installed PWA. Features are gated — not deleted — so the codebase stays unified.
 
-**Currently desktop-only:** Duel mode, CSV import, batch edit, batch archive, batch delete, and the numeric Vault filters (Success Rate, Review Count, Heat, Frequency Rank).
+**Currently desktop-only:** Duel mode, CSV import, batch edit, batch archive, batch delete, the numeric Vault filters (Success Rate, Review Count, Heat, Frequency Rank), and the Practice Selected button.
+
+**Currently mobile-only:** `#71B2F4` blue background on the Word Packs and Vault pages.
 
 See `flath-app/CLAUDE.md` for the full surface-gating rules (auto-loaded by Claude Code on every session).
 
@@ -119,6 +121,24 @@ This prints the current PoS distribution and lists any rows that would be rewrit
 ---
 
 ## Changelog
+
+### Phase 3.2 — Mobile polish, safety caps, and vault temporal filter (May 2026)
+
+**Mobile surface**
+- Word Packs and Vault pages now use a solid `#71B2F4` blue background on mobile (all other surfaces keep `bg-gray-50`).
+- "Practice Selected" button hidden on mobile — requires checkbox row-selection which is already desktop-only.
+
+**Vault improvements**
+- "Review this" cap raised from 20 to 50 words.
+- Theme autocomplete in Add/Edit word modals is now accent-insensitive (uses `normalizeForSearch()` — same NFD normalization as vault search).
+- Temporal filter redesigned: replaces the fixed Today/Week/Month buttons with a free-form `[field] [in the last | more than] [X] days` control. Supported fields: Last reviewed, Last correct, Last mistake, Added.
+
+**DB migration** — `flath-app/sql/add_last_correct_mistake.sql`
+- Adds `last_correct_at` and `last_mistake_at` columns to `user_word_settings`.
+- Backfills from `attempts_history` (max `ts` per user+word for `know` and `forgot` outcomes).
+- `recomputeUserWordSettings` now writes both fields after every session.
+
+---
 
 ### Phase 3.1 — Adaptive Modality Distribution (May 2026)
 

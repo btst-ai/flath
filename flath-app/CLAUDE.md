@@ -35,8 +35,14 @@ When you change one of these, update this list AND the comment at the gate site.
 - Batch archive button in vault selection toolbar — `app/vault/page.tsx`
 - Batch delete button + confirm dialog in vault — `app/vault/page.tsx`
 - Vault filters: Success Rate, Review Count, Heat, Frequency Rank — `app/vault/page.tsx` (hidden on mobile to declutter)
+- Practice Selected button in vault toolbar — `app/vault/page.tsx` (selection requires checkboxes which are desktop-only)
 
 The `/duel` route itself is NOT route-blocked — typing the URL still loads it. Gate is purely UI hiding.
+
+## Currently gated (mobile-only)
+
+- Word Packs page background color `#71B2F4` — `app/packs/page.tsx`
+- Vault page background color `#71B2F4` — `app/vault/page.tsx`
 
 ## Adding a new feature — checklist
 

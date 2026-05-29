@@ -23,7 +23,13 @@ One codebase, multiple surfaces. A `useSurface()` hook (`lib/surface.ts`) detect
 **Currently gated to desktop only:**
 - Duel mode entry (`app/page.tsx`)
 - CSV import (`app/vault/page.tsx`)
-- Batch edit modal (`app/vault/page.tsx`)
+- Batch edit modal, per-row checkboxes, select-all (`app/vault/page.tsx`)
+- Batch archive / batch delete (`app/vault/page.tsx`)
+- Practice Selected button (`app/vault/page.tsx`)
+- Vault filters: Success Rate, Review Count, Heat, Frequency Rank (`app/vault/page.tsx`)
+
+**Currently mobile-only:**
+- `#71B2F4` blue background on Word Packs and Vault pages
 
 See `CLAUDE.md` for the full surface-gating rules and checklist for adding new features.
 

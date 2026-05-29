@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAddWord } from "@/hooks/useAddWord";
 import { ConflictResolutionModal } from "@/components/ConflictResolutionModal";
-import { POS_VALUES } from "@/lib/normalize";
+import { POS_VALUES, normalizeForSearch } from "@/lib/normalize";
 
 interface AddWordModalProps {
   isOpen: boolean;
@@ -59,7 +59,7 @@ export function AddWordModal({ isOpen, onClose }: AddWordModalProps) {
 
   const themeSuggestions = theme.length === 0
     ? availableThemes
-    : availableThemes.filter(t => t.toLowerCase().includes(theme.toLowerCase()) && t.toLowerCase() !== theme.toLowerCase());
+    : availableThemes.filter(t => normalizeForSearch(t).includes(normalizeForSearch(theme)) && normalizeForSearch(t) !== normalizeForSearch(theme));
 
   return (
     <>
@@ -113,7 +113,7 @@ export function AddWordModal({ isOpen, onClose }: AddWordModalProps) {
                   onBlur={() => setTimeout(() => setShowThemeSuggestions(false), 200)}
                   onKeyDown={(e) => {
                     if (e.key === "Tab") {
-                      const filtered = availableThemes.filter(t => t.toLowerCase().includes(theme.toLowerCase()) && t.toLowerCase() !== theme.toLowerCase());
+                      const filtered = availableThemes.filter(t => normalizeForSearch(t).includes(normalizeForSearch(theme)) && normalizeForSearch(t) !== normalizeForSearch(theme));
                       if (filtered.length > 0 && theme.length > 0) {
                         e.preventDefault();
                         setTheme(filtered[0]);

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { X, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
-import { POS_VALUES, PosValue, coercePos } from "@/lib/normalize";
+import { POS_VALUES, PosValue, coercePos, normalizeForSearch } from "@/lib/normalize";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 
 export function getDifficultyFromRank(rank: number) {
@@ -165,7 +165,7 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Tab') {
-                    const filtered = availableThemes.filter(t => t.toLowerCase().includes(theme.toLowerCase()) && t.toLowerCase() !== theme.toLowerCase());
+                    const filtered = availableThemes.filter(t => normalizeForSearch(t).includes(normalizeForSearch(theme)) && normalizeForSearch(t) !== normalizeForSearch(theme));
                     if (filtered.length > 0 && theme.length > 0) {
                       e.preventDefault();
                       setTheme(filtered[0]);
@@ -180,7 +180,7 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
                 (() => {
                   const filtered = theme.length === 0
                     ? availableThemes
-                    : availableThemes.filter(t => t.toLowerCase().includes(theme.toLowerCase()) && t.toLowerCase() !== theme.toLowerCase());
+                    : availableThemes.filter(t => normalizeForSearch(t).includes(normalizeForSearch(theme)) && normalizeForSearch(t) !== normalizeForSearch(theme));
                   if (filtered.length === 0) return null;
                   return (
                     <ul className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">

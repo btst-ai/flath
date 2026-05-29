@@ -70,12 +70,17 @@ export async function recomputeUserWordSettings(
     const avgRec = recAttempts > 0 ? (recScore / recAttempts) * 100 : (currentSettings?.avg_success_rate_rec ?? 50);
     const reviewCount = prodAttempts + recAttempts;
 
+    const lastCorrect = [...history].reverse().find(h => h.outcome === 'know')?.ts ?? null;
+    const lastMistake = [...history].reverse().find(h => h.outcome === 'forgot')?.ts ?? null;
+
     await client.from("user_word_settings").update({
       avg_success_rate_prod: avgProd,
       avg_success_rate_rec: avgRec,
       interest_score: interestScore,
       review_count: reviewCount,
-      last_reviewed: new Date().toISOString()
+      last_reviewed: new Date().toISOString(),
+      last_correct_at: lastCorrect,
+      last_mistake_at: lastMistake,
     }).eq("user_id", userId).eq("word_id", wId);
   }
 }
