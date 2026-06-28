@@ -153,6 +153,7 @@ export function useAddWord() {
 
         if (settingsError) {
           console.error("Settings error:", settingsError);
+          toast.error(`Failed to save ${word.greek_text} to your library`);
         } else {
           successCount++;
           addedWordsStats.push({

@@ -77,7 +77,7 @@ export default function PacksPage() {
     setIsLoadingPacks(true);
     
     // Fetch all user words for stats
-    const { data: wordsData } = await supabase
+    const { data: wordsData, error: wordsError } = await supabase
       .from("user_word_settings")
       .select(`
         word_id,
@@ -90,9 +90,23 @@ export default function PacksPage() {
       .eq("user_id", userId)
       .eq("is_archived", false);
 
-    const { data: staticItems } = await supabase
+    if (wordsError) {
+      console.error("Failed to load words for pack stats", wordsError);
+      toast.error("Failed to load packs");
+      setIsLoadingPacks(false);
+      return;
+    }
+
+    const { data: staticItems, error: itemsError } = await supabase
       .from("word_pack_items")
       .select("pack_id, word_id");
+
+    if (itemsError) {
+      console.error("Failed to load pack items", itemsError);
+      toast.error("Failed to load packs");
+      setIsLoadingPacks(false);
+      return;
+    }
 
     const themes = new Set<string>();
     if (wordsData) {
