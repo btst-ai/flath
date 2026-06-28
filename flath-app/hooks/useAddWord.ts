@@ -139,6 +139,8 @@ export function useAddWord() {
         }
 
         // 3. Upsert into user_word_settings
+        // added_at defaults to now() in the DB; set it explicitly here so the
+        // "Added last X days" vault filter works immediately on new words.
         const { error: settingsError } = await supabase
           .from("user_word_settings")
           .upsert({
@@ -146,6 +148,7 @@ export function useAddWord() {
             word_id: finalWordId,
             avg_success_rate_prod: 50,
             avg_success_rate_rec: 50,
+            added_at: new Date().toISOString(),
           }, { onConflict: 'user_id, word_id', ignoreDuplicates: true });
 
         if (settingsError) {

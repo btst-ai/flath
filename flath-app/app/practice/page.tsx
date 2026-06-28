@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback, Suspense } from "react";
+import { useEffect, useState, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { motion } from "framer-motion";
-import { Check, X, HelpCircle, StopCircle, Star, Archive, Edit2, Copy, Search } from "lucide-react";
+import { Check, X, HelpCircle, StopCircle, Star, Archive, Edit2, Copy, Search, BookOpen } from "lucide-react";
 import { submitSessionAttempts, getLastAttemptOutcomes, getModalityFailureCounts } from "@/app/actions/session";
 import { EditWordModal, getDifficultyFromRank } from "@/components/EditWordModal";
+import { InSessionVaultDrawer } from "@/components/InSessionVaultDrawer";
 import {
   fetchUserWords,
   getMistakesForRepair,
@@ -53,11 +54,18 @@ function PracticeSession() {
 
   // Card state
   const [flipped, setFlipped] = useState(false);
+  // Ref that holds the card currently painted on the visible faces.
+  // Updated only AFTER the flip has settled to false so the front never
+  // shows next-card data early and the back never re-renders stale answer text.
+  const displayWordRef = useRef<SessionWord | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [currentInterestToggle, setCurrentInterestToggle] = useState<string>("none");
   const [editingWord, setEditingWord] = useState<any | null>(null);
   const [skippedCards, setSkippedCards] = useState<Set<string>>(new Set());
   const [isReviewingSkippedCard, setIsReviewingSkippedCard] = useState(false);
+
+  // In-session vault drawer — purely additive; never touches queue/attempts/timers
+  const [isVaultDrawerOpen, setIsVaultDrawerOpen] = useState(false);
 
   // Phase 3: progress tracking
   const [seenWordIds, setSeenWordIds] = useState<Set<string>>(new Set());
@@ -75,6 +83,21 @@ function PracticeSession() {
 
   // Phase 3: prior-attempt outcomes for the recap 🎉 marker
   const [priorOutcomes, setPriorOutcomes] = useState<Record<string, "know" | "meh" | "forgot">>({});
+
+  // Background batched save: cursor tracking how many attempts have already
+  // been flushed to the DB. A useRef (not state) so reads inside async callbacks
+  // are always synchronous and never stale.
+  const flushedCountRef = useRef(0);
+
+  // Guards against concurrent background flushes that would produce overlapping
+  // slices and duplicate attempts_history inserts. True while a flush is in
+  // flight; reset to false in the .finally() handler and at session reset points.
+  const isFlushingRef = useRef(false);
+
+  // Ref mirror of the attempts state so handleEndSession (called from setTimeout
+  // callbacks) always sees the complete list — setAttempts is async and the
+  // closure may capture a stale value when the queue empties on the final card.
+  const attemptsRef = useRef<any[]>([]);
 
   useEffect(() => {
     if (isLockedUntil === 0) return;
@@ -169,6 +192,12 @@ function PracticeSession() {
     setPassStartIds(sessionWords.map(w => w.word_id));
     setFirstAttemptOutcome({});
     setSessionStartTs(new Date().toISOString());
+    // Reset all flush-tracking refs so an in-place param change can't cause
+    // handleEndSession to re-submit a prior session's attempts.
+    flushedCountRef.current = 0;
+    isFlushingRef.current = false;
+    attemptsRef.current = [];
+    setAttempts([]);
     setIsLoading(false);
   }, [userId, packId, wordIdsParam, mode, limit, preserveOrder, excludeSuccessful, excludeReviewedToday]);
 
@@ -209,13 +238,46 @@ function PracticeSession() {
     if (isLocked) return;
     const currentWord = queue[0];
 
-    // Log attempt
-    setAttempts(prev => [...prev, {
+    // Log attempt — build locally so we can read the new total synchronously
+    // (setAttempts is async and the closure captures the pre-update value).
+    const newAttempt = {
       word_id: currentWord.word_id,
       mode: currentWord.track,
       outcome,
-      interest_interaction: currentInterestToggle
-    }]);
+      interest_interaction: currentInterestToggle,
+    };
+    const nextAttempts = [...attempts, newAttempt];
+    setAttempts(nextAttempts);
+    attemptsRef.current = nextAttempts;
+
+    // Background batch flush: every 5 new attempts fire-and-forget to the DB.
+    // flushedCountRef tracks how many have already been sent successfully.
+    // isFlushingRef prevents a second concurrent flush from slicing the same
+    // range — only one flush is in-flight at a time. The cursor is advanced
+    // OPTIMISTICALLY before the network call so subsequent cards see the updated
+    // lower bound and never re-slice an already-dispatched range. On failure the
+    // cursor is rolled back so handleEndSession will retry that slice.
+    if (userId && !isFlushingRef.current && nextAttempts.length - flushedCountRef.current >= 5) {
+      const sliceStart = flushedCountRef.current;
+      const targetCursor = nextAttempts.length;
+      const slice = nextAttempts.slice(sliceStart);
+      isFlushingRef.current = true;
+      flushedCountRef.current = targetCursor; // optimistic advance
+      submitSessionAttempts(userId, slice)
+        .then((res) => {
+          if (res && 'error' in res) {
+            console.error("[practice] background flush failed", res.error);
+            flushedCountRef.current = sliceStart; // roll back so end-session retries
+          }
+        })
+        .catch((err) => {
+          console.error("[practice] background flush error", err);
+          flushedCountRef.current = sliceStart; // roll back so end-session retries
+        })
+        .finally(() => {
+          isFlushingRef.current = false;
+        });
+    }
 
     // Track first-attempt outcome per word this session
     setFirstAttemptOutcome(prev => prev[currentWord.word_id] ? prev : { ...prev, [currentWord.word_id]: outcome });
@@ -242,6 +304,11 @@ function PracticeSession() {
           if (isLastOfPass) {
             setIteration(i => i + 1);
             setShowIterationSplash(true);
+            // Reset per-pass pill categorization so recycled cards count as
+            // ⚫ Not Seen in the new review cycle. masteredCount and
+            // firstAttemptOutcome are intentionally left intact.
+            setSeenWordIds(new Set());
+            setMehWordIds(new Set());
             return newQueue.map(w => w.word_id);
           }
           return passIds;
@@ -282,6 +349,11 @@ function PracticeSession() {
           if (isLastOfPass) {
             setIteration(i => i + 1);
             setShowIterationSplash(true);
+            // Reset per-pass pill categorization so recycled cards count as
+            // ⚫ Not Seen in the new review cycle. masteredCount and
+            // firstAttemptOutcome are intentionally left intact.
+            setSeenWordIds(new Set());
+            setMehWordIds(new Set());
             // The next pass is whatever remains
             return queue.slice(1).map(w => w.word_id);
           }
@@ -297,8 +369,8 @@ function PracticeSession() {
       setNowTick(Date.now());
       setTimeout(() => {
         setFlipped(false);
-        advanceMissQueue();
         setIsLockedUntil(0);
+        setTimeout(() => { advanceMissQueue(); }, 150);
       }, 5000);
     }
   };
@@ -325,9 +397,15 @@ function PracticeSession() {
       }
     }
 
-    if (attempts.length > 0 && userId) {
+    // Flush only the un-flushed remainder (attempts already batched-saved are
+    // not re-sent). flushedCountRef.current is the exclusive lower bound.
+    // Use attemptsRef.current (not the attempts state) because this function
+    // is called from setTimeout callbacks where the state closure may be stale.
+    const remainder = attemptsRef.current.slice(flushedCountRef.current);
+    if (remainder.length > 0 && userId) {
       setIsSaving(true);
-      await submitSessionAttempts(userId, attempts);
+      await submitSessionAttempts(userId, remainder);
+      flushedCountRef.current = attemptsRef.current.length;
       setIsSaving(false);
     }
   };
@@ -388,7 +466,8 @@ function PracticeSession() {
                 <button
                   onClick={() => {
                     setQueue([]); setTotalSessionSize(0); setMasteredCount(0);
-                    setAttempts([]); setIsFinished(false); setElapsedSeconds(0);
+                    setAttempts([]); attemptsRef.current = []; setIsFinished(false); setElapsedSeconds(0);
+                    flushedCountRef.current = 0; isFlushingRef.current = false;
                     fetchSessionData();
                   }}
                   className="flex-1 px-5 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition"
@@ -469,11 +548,21 @@ function PracticeSession() {
   }
 
   const currentWord = queue[0];
-  const isRec = currentWord.track === "rec";
-  const promptText = isRec ? currentWord.words_dim.greek_text : currentWord.words_dim.french_text;
-  const translationText = isRec ? currentWord.words_dim.french_text : currentWord.words_dim.greek_text;
 
-  const currentRank = currentWord.words_dim.frequency_rank > 0 ? currentWord.words_dim.frequency_rank : 99999;
+  // Keep displayWordRef in sync with the current queue head whenever
+  // the card is in the un-flipped (front) state, i.e. safe to swap content.
+  // This prevents the front face from briefly painting the next card's data
+  // while the flip-down animation is still in flight.
+  if (!flipped) {
+    displayWordRef.current = currentWord;
+  }
+  const displayWord = displayWordRef.current ?? currentWord;
+
+  const isRec = displayWord.track === "rec";
+  const promptText = isRec ? displayWord.words_dim.greek_text : displayWord.words_dim.french_text;
+  const translationText = isRec ? displayWord.words_dim.french_text : displayWord.words_dim.greek_text;
+
+  const currentRank = displayWord.words_dim.frequency_rank > 0 ? displayWord.words_dim.frequency_rank : 99999;
   const difficulty = getDifficultyFromRank(currentRank);
   const difficultyColors = {
     easy: "bg-green-100 text-green-700",
@@ -511,7 +600,13 @@ function PracticeSession() {
 
   return (
     <main className="h-screen overflow-hidden md:overflow-visible md:min-h-screen md:h-auto flex flex-col md:items-center p-3 md:p-6">
-      <EditWordModal 
+      {/* In-session Vault drawer — purely additive; never touches queue/attempts/timers */}
+      <InSessionVaultDrawer
+        isOpen={isVaultDrawerOpen}
+        onClose={() => setIsVaultDrawerOpen(false)}
+        userId={userId}
+      />
+      <EditWordModal
         isOpen={!!editingWord}
         onClose={() => setEditingWord(null)}
         word={editingWord}
@@ -520,8 +615,10 @@ function PracticeSession() {
             const { data, error } = await supabase.from('words_dim').select('*').eq('id', editingWord.id).single();
             if (error) console.error('[practice] refresh edited word failed', error);
             if (data) {
+              // Null-safe guard: queue items whose words_dim is null are left
+              // untouched rather than throwing on item.words_dim.id access.
               setQueue(prev => prev.map(item =>
-                item.words_dim.id === data.id ? { ...item, words_dim: data } : item
+                item.words_dim?.id === data.id ? { ...item, words_dim: data } : item
               ));
             }
           }
@@ -538,7 +635,7 @@ function PracticeSession() {
           <div className={`w-px h-4 ${isLocked ? 'bg-white' : 'bg-gray-300'}`} />
           {progressPill}
         </div>
-        <div className="flex justify-center">
+        <div className="flex items-center justify-center gap-2">
           <button
             onClick={() => handleEndSession(false)}
             className="flex items-center bg-white border border-gray-200 shadow-sm rounded-full overflow-hidden transition hover:bg-red-50 font-medium text-sm"
@@ -548,6 +645,14 @@ function PracticeSession() {
               <StopCircle className="w-4 h-4" />
               End practice
             </span>
+          </button>
+          <button
+            onClick={() => setIsVaultDrawerOpen(true)}
+            className="flex items-center gap-1.5 bg-white border border-gray-200 shadow-sm rounded-full px-4 py-2.5 font-medium text-sm text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition"
+            title="Open Vault"
+          >
+            <BookOpen className="w-4 h-4" />
+            Vault
           </button>
         </div>
       </div>
@@ -562,16 +667,26 @@ function PracticeSession() {
           <div className={`w-px h-4 ${isLocked ? 'bg-white' : 'bg-gray-300'}`} />
           {progressPill}
         </div>
-        <button
-          onClick={() => handleEndSession(false)}
-          className="flex items-center bg-white border border-gray-200 shadow-sm rounded-full overflow-hidden transition hover:bg-red-50 font-medium text-sm"
-        >
-          <span className="px-4 py-2 text-gray-500 border-r border-gray-200">Review #{iteration}</span>
-          <span className="flex items-center gap-1.5 px-4 py-2 text-red-500">
-            <StopCircle className="w-4 h-4" />
-            End Session
-          </span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsVaultDrawerOpen(true)}
+            className="flex items-center gap-1.5 bg-white border border-gray-200 shadow-sm rounded-full px-4 py-2 font-medium text-sm text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition"
+            title="Open Vault"
+          >
+            <BookOpen className="w-4 h-4" />
+            Vault
+          </button>
+          <button
+            onClick={() => handleEndSession(false)}
+            className="flex items-center bg-white border border-gray-200 shadow-sm rounded-full overflow-hidden transition hover:bg-red-50 font-medium text-sm"
+          >
+            <span className="px-4 py-2 text-gray-500 border-r border-gray-200">Review #{iteration}</span>
+            <span className="flex items-center gap-1.5 px-4 py-2 text-red-500">
+              <StopCircle className="w-4 h-4" />
+              End Session
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Card + action buttons: on mobile flex-col with 70/30 split */}
@@ -601,7 +716,7 @@ function PracticeSession() {
               <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                 <div className="flex flex-col items-start gap-2 order-2 md:order-1">
                   <span className="text-xs font-bold uppercase tracking-widest text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
-                    Theme: {currentWord.words_dim.theme || 'None'}
+                    Theme: {displayWord.words_dim.theme || 'None'}
                   </span>
                   <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${diffColor}`}>
                     {difficulty}
@@ -616,14 +731,14 @@ function PracticeSession() {
                     <Copy className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={(e) => { e.stopPropagation(); window.open(`https://www.google.com/search?q=${encodeURIComponent(currentWord.words_dim.greek_text + ' meaning')}`, '_blank'); }}
+                    onClick={(e) => { e.stopPropagation(); window.open(`https://www.google.com/search?q=${encodeURIComponent(displayWord.words_dim.greek_text + ' meaning')}`, '_blank'); }}
                     className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors z-10"
                     title="Search online"
                   >
                     <Search className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={(e) => { e.stopPropagation(); setEditingWord(currentWord.words_dim); }}
+                    onClick={(e) => { e.stopPropagation(); setEditingWord(displayWord.words_dim); }}
                     className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors z-10"
                     title="Edit Word"
                   >
@@ -637,7 +752,7 @@ function PracticeSession() {
                   {promptText}
                 </h2>
                 <p className="text-gray-400 font-medium">
-                  {currentWord.words_dim.part_of_speech}
+                  {displayWord.words_dim.part_of_speech}
                 </p>
               </div>
 
@@ -654,7 +769,7 @@ function PracticeSession() {
               <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                 <div className="flex flex-col items-start gap-2 order-2 md:order-1">
                   <span className="text-xs font-bold uppercase tracking-widest text-gray-400 bg-gray-800 px-3 py-1 rounded-full">
-                    Theme: {currentWord.words_dim.theme || 'None'}
+                    Theme: {displayWord.words_dim.theme || 'None'}
                   </span>
                   <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${diffColor}`}>
                     {difficulty}
@@ -669,14 +784,14 @@ function PracticeSession() {
                     <Copy className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={(e) => { e.stopPropagation(); window.open(`https://www.google.com/search?q=${encodeURIComponent(currentWord.words_dim.greek_text + ' meaning')}`, '_blank'); }}
+                    onClick={(e) => { e.stopPropagation(); window.open(`https://www.google.com/search?q=${encodeURIComponent(displayWord.words_dim.greek_text + ' meaning')}`, '_blank'); }}
                     className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-full transition-colors z-10"
                     title="Search online"
                   >
                     <Search className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={(e) => { e.stopPropagation(); setEditingWord(currentWord.words_dim); }}
+                    onClick={(e) => { e.stopPropagation(); setEditingWord(displayWord.words_dim); }}
                     className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-full transition-colors z-10"
                     title="Edit Word"
                   >

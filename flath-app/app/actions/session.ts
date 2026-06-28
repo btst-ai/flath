@@ -141,6 +141,43 @@ export async function getModalityFailureCounts(
   return { prodFailures, recFailures };
 }
 
+/**
+ * Record a single word as a mistake and recompute its aggregates.
+ *
+ * Inserts one `attempts_history` row with `outcome:'forgot'` and
+ * `interest_interaction:'none'`, then calls `recomputeUserWordSettings` so
+ * `avg_success_rate_*` drops and `last_mistake_at` is stamped. Mode defaults
+ * to `'rec'` when there is no active production-mode session context (e.g.
+ * when tagging from the vault or the add-word modal).
+ *
+ * Used by: AddWordModal "Add a mistake" checkbox, Vault quick-tag button,
+ * in-session drawer quick-tag button.
+ */
+export async function markWordAsMistake(
+  userId: string,
+  wordId: string,
+  mode: "prod" | "rec" = "rec",
+): Promise<{ success: true } | { error: string }> {
+  const { error: insertErr } = await browserSupabase
+    .from("attempts_history")
+    .insert({
+      user_id: userId,
+      word_id: wordId,
+      mode,
+      outcome: "forgot",
+      interest_interaction: "none",
+    });
+
+  if (insertErr) {
+    console.error("markWordAsMistake: failed to insert attempt", insertErr);
+    return { error: insertErr.message };
+  }
+
+  await recomputeUserWordSettings(userId, [wordId]);
+
+  return { success: true };
+}
+
 export async function submitSessionAttempts(userId: string, attempts: any[]) {
   // 1. Insert attempts
   const historyInserts = attempts.map(a => ({

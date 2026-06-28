@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { useAddWord } from "@/hooks/useAddWord";
 import { ConflictResolutionModal } from "@/components/ConflictResolutionModal";
 import { POS_VALUES, normalizeForSearch } from "@/lib/normalize";
+import { markWordAsMistake } from "@/app/actions/session";
 
 interface AddWordModalProps {
   isOpen: boolean;
@@ -17,8 +19,7 @@ export function AddWordModal({ isOpen, onClose }: AddWordModalProps) {
   const [frenchText, setFrenchText] = useState("");
   const [theme, setTheme] = useState("");
   const [pos, setPos] = useState("Nom");
-  const [difficulty, setDifficulty] = useState("medium");
-
+  const [addMistake, setAddMistake] = useState(true);
   const [availableThemes, setAvailableThemes] = useState<string[]>([]);
   const [showThemeSuggestions, setShowThemeSuggestions] = useState(false);
   const themeInputRef = useRef<HTMLInputElement>(null);
@@ -40,18 +41,30 @@ export function AddWordModal({ isOpen, onClose }: AddWordModalProps) {
     setFrenchText("");
     setTheme("");
     setPos("Nom");
-    setDifficulty("medium");
+    setAddMistake(true);
     onClose();
   };
 
   const handleSave = async () => {
     if (!greekText.trim() || !frenchText.trim()) return;
-    await addWords([{
+    const result = await addWords([{
       greek_text: greekText.trim(),
       french_text: frenchText.trim(),
       theme: theme.trim() || "General",
       part_of_speech: pos.trim(),
     }]);
+    if (addMistake && result && result.stats.length > 0) {
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData.user?.id;
+      if (userId) {
+        for (const stat of result.stats) {
+          const res = await markWordAsMistake(userId, stat.id);
+          if ("error" in res) {
+            toast.error(`Could not tag as mistake: ${res.error}`);
+          }
+        }
+      }
+    }
     handleClose();
   };
 
@@ -158,21 +171,20 @@ export function AddWordModal({ isOpen, onClose }: AddWordModalProps) {
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide">Difficulty (Frequency)</label>
-              <select
-                value={difficulty}
-                onChange={(e) => setDifficulty(e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
-              >
-                <option value="easy">Easy (Top 1-1,000)</option>
-                <option value="medium">Medium (1,001-3,000)</option>
-                <option value="hard">Hard (3,001-6,000)</option>
-                <option value="niche">Niche (&gt;6,000)</option>
-              </select>
+            <div className="flex items-center gap-2">
+              <input
+                id="add-mistake-checkbox"
+                type="checkbox"
+                checked={addMistake}
+                onChange={(e) => setAddMistake(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+              />
+              <label htmlFor="add-mistake-checkbox" className="text-sm text-gray-700 cursor-pointer select-none">
+                Add a mistake
+              </label>
             </div>
 
-            <div className="pt-4 flex justify-end gap-3">
+            <div className="pt-2 flex justify-end gap-3">
               <button
                 onClick={handleClose}
                 className="px-5 py-2.5 text-gray-700 font-semibold bg-gray-100 hover:bg-gray-200 rounded-lg transition"
