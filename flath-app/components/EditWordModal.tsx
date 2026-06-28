@@ -33,7 +33,6 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
   const [frenchText, setFrenchText] = useState("");
   const [theme, setTheme] = useState("");
   const [pos, setPos] = useState<PosValue>("Nom");
-  const [difficulty, setDifficulty] = useState("niche");
   const [isSaving, setIsSaving] = useState(false);
 
   const [availableThemes, setAvailableThemes] = useState<string[]>([]);
@@ -63,9 +62,6 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
       setFrenchText(word.french_text || "");
       setTheme(word.theme || "");
       setPos(coercePos(word.part_of_speech));
-
-      const rank = word.frequency_rank > 0 ? word.frequency_rank : 99999;
-      setDifficulty(getDifficultyFromRank(rank));
     }
   }, [word, isOpen]);
 
@@ -85,7 +81,6 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
         french_text: frenchText.trim(),
         theme: theme.trim(),
         part_of_speech: pos.trim(),
-        frequency_rank: getRankFromDifficulty(difficulty)
       })
       .eq("id", word.id)
       .select();
@@ -217,21 +212,6 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
                 {POS_VALUES.map(v => <option key={v} value={v}>{v}</option>)}
               </select>
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1 uppercase tracking-wide">Difficulty (Frequency)</label>
-            <select
-              value={difficulty}
-              onChange={(e) => setDifficulty(e.target.value)}
-              disabled={!canEdit}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              <option value="easy">Easy (Top 1-1,000)</option>
-              <option value="medium">Medium (1,001-3,000)</option>
-              <option value="hard">Hard (3,001-6,000)</option>
-              <option value="niche">Niche (&gt;6,000)</option>
-            </select>
           </div>
 
           <div className="pt-4 flex justify-end gap-3">

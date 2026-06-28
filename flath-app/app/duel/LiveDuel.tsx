@@ -201,10 +201,16 @@ export function LiveDuel({ state, dispatch, onEndSession }: Props) {
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
               </div>
-              <p className="text-gray-400 text-lg mb-4">{promptText}</p>
-              <h2 className={`font-medium text-white ${!isRec ? "text-5xl sm:text-6xl font-serif" : "text-4xl sm:text-5xl"}`}>
-                {translationText}
-              </h2>
+              {/* Guard answer content on flipped so the back→front transition
+                  never paints stale answer text from the previous card. */}
+              {flipped && (
+                <>
+                  <p className="text-gray-400 text-lg mb-4">{promptText}</p>
+                  <h2 className={`font-medium text-white ${!isRec ? "text-5xl sm:text-6xl font-serif" : "text-4xl sm:text-5xl"}`}>
+                    {translationText}
+                  </h2>
+                </>
+              )}
             </div>
           )}
         </div>

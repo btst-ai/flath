@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useSurface, isMobileSurface } from "@/lib/surface";
 import { toast } from "sonner";
-import { Folder, Play, Plus, X, Star, Settings, Edit, Trash2, ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react";
+import { Folder, Play, Plus, X, Star, Settings, Edit, Trash2, ArrowUpDown, ChevronUp, ChevronDown, Pencil, Check } from "lucide-react";
 import { getDifficultyFromRank } from "@/components/EditWordModal";
 import { EditPackModal } from "@/components/EditPackModal";
 
@@ -54,6 +54,10 @@ export default function PacksPage() {
 
   const [isCreatingSmart, setIsCreatingSmart] = useState(false);
   const [editingPack, setEditingPack] = useState<any | null>(null);
+
+  // Inline rename state — keyed by pack id
+  const [renamingPackId, setRenamingPackId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   // Smart Pack Form
   const [name, setName] = useState("");
@@ -252,6 +256,56 @@ export default function PacksPage() {
     if (newSet.has(id)) newSet.delete(id);
     else newSet.add(id);
     setSelectedPreviewIds(newSet);
+  };
+
+  const handleRenameStart = (pack: any) => {
+    setRenamingPackId(pack.id);
+    setRenameValue(pack.name);
+  };
+
+  const handleRenameCancel = () => {
+    setRenamingPackId(null);
+    setRenameValue("");
+  };
+
+  const handleRenameConfirm = async (pack: any) => {
+    const trimmed = renameValue.trim();
+    if (!trimmed) {
+      toast.error("Pack name cannot be empty");
+      return;
+    }
+    if (trimmed === pack.name) {
+      handleRenameCancel();
+      return;
+    }
+
+    // Optimistic update
+    setPacks(prev => prev.map(p => p.id === pack.id ? { ...p, name: trimmed } : p));
+    setRenamingPackId(null);
+    setRenameValue("");
+
+    const { data, error } = await supabase
+      .from("word_packs")
+      .update({ name: trimmed })
+      .eq("id", pack.id)
+      .eq("author_id", userId)
+      .select();
+
+    if (error) {
+      // Revert optimistic update
+      setPacks(prev => prev.map(p => p.id === pack.id ? { ...p, name: pack.name } : p));
+      toast.error("Failed to rename pack: " + error.message);
+      return;
+    }
+
+    // RLS denial: update succeeded but returned no rows
+    if (!data || data.length === 0) {
+      setPacks(prev => prev.map(p => p.id === pack.id ? { ...p, name: pack.name } : p));
+      toast.error("Could not rename pack — permission denied");
+      return;
+    }
+
+    toast.success("Pack renamed");
   };
 
   const displayedPacks = useMemo(() => {
@@ -596,8 +650,49 @@ export default function PacksPage() {
                   >
                     <Folder className="w-5 h-5" />
                   </div>
-                  <div>
-                    <h3 className="font-bold text-gray-900 line-clamp-1" title={pack.name}>{pack.name}</h3>
+                  <div className="flex-1 min-w-0">
+                    {renamingPackId === pack.id ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          value={renameValue}
+                          onChange={e => setRenameValue(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") handleRenameConfirm(pack);
+                            if (e.key === "Escape") handleRenameCancel();
+                          }}
+                          autoFocus
+                          className="flex-1 min-w-0 text-sm font-bold border border-blue-400 rounded px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-900"
+                        />
+                        <button
+                          onClick={() => handleRenameConfirm(pack)}
+                          className="p-1 text-green-600 hover:bg-green-50 rounded transition flex-shrink-0"
+                          title="Confirm rename"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={handleRenameCancel}
+                          className="p-1 text-gray-400 hover:bg-gray-100 rounded transition flex-shrink-0"
+                          title="Cancel rename"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 group">
+                        <h3 className="font-bold text-gray-900 line-clamp-1 min-w-0" title={pack.name}>{pack.name}</h3>
+                        {!pack.is_auto && pack.author_id === userId && (
+                          <button
+                            onClick={() => handleRenameStart(pack)}
+                            className="p-0.5 text-gray-300 hover:text-blue-500 opacity-0 group-hover:opacity-100 focus:opacity-100 rounded transition flex-shrink-0"
+                            title="Rename pack"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    )}
                     <div className="flex gap-2 items-center mt-1">
                       <span className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full font-bold uppercase tracking-wider">
                         {pack.is_smart ? "Smart" : "Static"}
