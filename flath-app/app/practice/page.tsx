@@ -84,6 +84,9 @@ function PracticeSession() {
   // Phase 3: prior-attempt outcomes for the recap 🎉 marker
   const [priorOutcomes, setPriorOutcomes] = useState<Record<string, "know" | "meh" | "forgot">>({});
 
+  // Accessibility: live-region message for screen readers
+  const [liveMessage, setLiveMessage] = useState("");
+
   // Background batched save: cursor tracking how many attempts have already
   // been flushed to the DB. A useRef (not state) so reads inside async callbacks
   // are always synchronous and never stale.
@@ -104,6 +107,20 @@ function PracticeSession() {
     const id = setInterval(() => setNowTick(Date.now()), 200);
     return () => clearInterval(id);
   }, [isLockedUntil]);
+
+  // Live region: announce card flip to screen readers
+  useEffect(() => {
+    if (flipped) {
+      setLiveMessage("Answer revealed");
+    }
+  }, [flipped]);
+
+  // Live region: announce iteration advance to screen readers
+  useEffect(() => {
+    if (iteration > 1) {
+      setLiveMessage(`Review ${iteration}`);
+    }
+  }, [iteration]);
 
   const handleInterest = async (e: React.MouseEvent, interaction: "fav" | "up" | "down" | "archive") => {
     e.stopPropagation();
@@ -519,6 +536,7 @@ function PracticeSession() {
                     onClick={() => setEditingWord(sw.words_dim)}
                     className="p-1.5 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-full transition"
                     title="Edit word"
+                    aria-label="Edit word"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
                   </button>
@@ -600,6 +618,8 @@ function PracticeSession() {
 
   return (
     <main className="h-screen overflow-hidden md:overflow-visible md:min-h-screen md:h-auto flex flex-col md:items-center p-3 md:p-6">
+      {/* Screen-reader live region — visually hidden, announces card flip and iteration changes */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only">{liveMessage}</div>
       {/* In-session Vault drawer — purely additive; never touches queue/attempts/timers */}
       <InSessionVaultDrawer
         isOpen={isVaultDrawerOpen}
@@ -727,6 +747,7 @@ function PracticeSession() {
                     onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(promptText); }}
                     className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors z-10"
                     title="Copy word"
+                    aria-label="Copy word"
                   >
                     <Copy className="w-4 h-4" />
                   </button>
@@ -734,6 +755,7 @@ function PracticeSession() {
                     onClick={(e) => { e.stopPropagation(); window.open(`https://www.google.com/search?q=${encodeURIComponent(displayWord.words_dim.greek_text + ' meaning')}`, '_blank'); }}
                     className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors z-10"
                     title="Search online"
+                    aria-label="Search on Google"
                   >
                     <Search className="w-4 h-4" />
                   </button>
@@ -741,6 +763,7 @@ function PracticeSession() {
                     onClick={(e) => { e.stopPropagation(); setEditingWord(displayWord.words_dim); }}
                     className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors z-10"
                     title="Edit Word"
+                    aria-label="Edit word"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
@@ -780,6 +803,7 @@ function PracticeSession() {
                     onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(translationText); }}
                     className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-full transition-colors z-10"
                     title="Copy word"
+                    aria-label="Copy word"
                   >
                     <Copy className="w-4 h-4" />
                   </button>
@@ -787,6 +811,7 @@ function PracticeSession() {
                     onClick={(e) => { e.stopPropagation(); window.open(`https://www.google.com/search?q=${encodeURIComponent(displayWord.words_dim.greek_text + ' meaning')}`, '_blank'); }}
                     className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-full transition-colors z-10"
                     title="Search online"
+                    aria-label="Search on Google"
                   >
                     <Search className="w-4 h-4" />
                   </button>
@@ -794,6 +819,7 @@ function PracticeSession() {
                     onClick={(e) => { e.stopPropagation(); setEditingWord(displayWord.words_dim); }}
                     className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-full transition-colors z-10"
                     title="Edit Word"
+                    aria-label="Edit word"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
@@ -815,6 +841,7 @@ function PracticeSession() {
                   onClick={(e) => handleInterest(e, "fav")}
                   className={`p-3 rounded-full transition-colors ${currentInterestToggle === "fav" ? "bg-yellow-500/20 text-yellow-400" : "bg-gray-800 text-gray-400 hover:text-yellow-400 hover:bg-gray-700"}`}
                   title="Favorite"
+                  aria-label="Mark as favourite"
                 >
                   <Star className="w-5 h-5" fill={currentInterestToggle === "fav" ? "currentColor" : "none"} />
                 </button>
@@ -823,6 +850,7 @@ function PracticeSession() {
                     onClick={(e) => handleInterest(e, "down")}
                     className={`px-4 py-2 rounded-full text-sm font-bold transition-colors ${isReviewingSkippedCard ? "bg-red-500/20 text-red-400" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
                     title="Review once and skip from remaining loops"
+                    aria-label="Show this word less often"
                   >
                     Show less
                   </button>
@@ -835,6 +863,7 @@ function PracticeSession() {
                   <button
                     onClick={(e) => handleInterest(e, "up")}
                     className={`px-4 py-2 rounded-full text-sm font-bold transition-colors ${currentInterestToggle === "up" ? "bg-green-500/20 text-green-400" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+                    aria-label="Show this word more often"
                   >
                     Show more
                   </button>
@@ -843,6 +872,7 @@ function PracticeSession() {
                   onClick={(e) => handleInterest(e, "archive")}
                   className={`p-3 rounded-full transition-colors ${currentInterestToggle === "archive" ? "bg-red-500/20 text-red-500" : "bg-gray-800 text-gray-400 hover:text-red-500 hover:bg-gray-700"}`}
                   title="Archive"
+                  aria-label="Archive word"
                 >
                   <Archive className="w-5 h-5" />
                 </button>

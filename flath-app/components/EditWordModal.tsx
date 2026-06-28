@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { POS_VALUES, PosValue, coercePos, normalizeForSearch } from "@/lib/normalize";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 export function getDifficultyFromRank(rank: number) {
   if (rank >= 1 && rank <= 1000) return "easy";
@@ -38,8 +39,11 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
   const [availableThemes, setAvailableThemes] = useState<string[]>([]);
   const [showThemeSuggestions, setShowThemeSuggestions] = useState(false);
   const themeInputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const { isAdmin } = useIsAdmin();
+
+  useFocusTrap(panelRef, isOpen);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -100,7 +104,13 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200">
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit word"
+        className="bg-white rounded-2xl max-w-md w-full shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200"
+      >
         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold text-gray-900">Edit Word</h2>
@@ -110,7 +120,7 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
               </span>
             )}
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition">
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition" aria-label="Close dialog">
             <X className="w-5 h-5" />
           </button>
         </div>
