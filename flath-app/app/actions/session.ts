@@ -15,16 +15,21 @@ export async function recomputeUserWordSettings(
   userId: string,
   wordIds: string[],
   client: SupabaseClient = browserSupabase,
-) {
+): Promise<{ error?: string }> {
   const uniqueWordIds = Array.from(new Set(wordIds));
 
   for (const wId of uniqueWordIds) {
-    const { data: history } = await client
+    const { data: history, error: historyError } = await client
       .from("attempts_history")
       .select("*")
       .eq("user_id", userId)
       .eq("word_id", wId)
       .order("ts", { ascending: true });
+
+    if (historyError) {
+      console.error("recomputeUserWordSettings: history read failed", historyError);
+      return { error: historyError.message };
+    }
 
     if (!history) continue;
 
@@ -59,12 +64,18 @@ export async function recomputeUserWordSettings(
       }
     }
 
-    const { data: currentSettings } = await client
+    const { data: currentSettings, error: settingsReadError } = await client
       .from("user_word_settings")
       .select("avg_success_rate_prod, avg_success_rate_rec")
       .eq("user_id", userId)
       .eq("word_id", wId)
       .single();
+
+    // PGRST116 = no rows; tolerated (a word may have no settings row yet).
+    if (settingsReadError && settingsReadError.code !== "PGRST116") {
+      console.error("recomputeUserWordSettings: settings read failed", settingsReadError);
+      return { error: settingsReadError.message };
+    }
 
     const avgProd = prodAttempts > 0 ? (prodScore / prodAttempts) * 100 : (currentSettings?.avg_success_rate_prod ?? 50);
     const avgRec = recAttempts > 0 ? (recScore / recAttempts) * 100 : (currentSettings?.avg_success_rate_rec ?? 50);
@@ -73,7 +84,7 @@ export async function recomputeUserWordSettings(
     const lastCorrect = [...history].reverse().find(h => h.outcome === 'know')?.ts ?? null;
     const lastMistake = [...history].reverse().find(h => h.outcome === 'forgot')?.ts ?? null;
 
-    await client.from("user_word_settings").update({
+    const { error: updateError } = await client.from("user_word_settings").update({
       avg_success_rate_prod: avgProd,
       avg_success_rate_rec: avgRec,
       interest_score: interestScore,
@@ -82,7 +93,14 @@ export async function recomputeUserWordSettings(
       last_correct_at: lastCorrect,
       last_mistake_at: lastMistake,
     }).eq("user_id", userId).eq("word_id", wId);
+
+    if (updateError) {
+      console.error("recomputeUserWordSettings: update failed", updateError);
+      return { error: updateError.message };
+    }
   }
+
+  return {};
 }
 
 /**
@@ -173,7 +191,12 @@ export async function markWordAsMistake(
     return { error: insertErr.message };
   }
 
-  await recomputeUserWordSettings(userId, [wordId]);
+  const recompute = await recomputeUserWordSettings(userId, [wordId]);
+  if (recompute.error) {
+    // The attempt row persisted, but aggregates may be stale until the next
+    // successful recompute. Surface it so the caller can inform the user.
+    return { error: `Saved the mistake but stats may be out of date: ${recompute.error}` };
+  }
 
   return { success: true };
 }
@@ -195,7 +218,11 @@ export async function submitSessionAttempts(userId: string, attempts: any[]) {
   }
 
   // 2. Recalculate aggregates for the involved words
-  await recomputeUserWordSettings(userId, attempts.map(a => a.word_id));
+  const recompute = await recomputeUserWordSettings(userId, attempts.map(a => a.word_id));
+  if (recompute.error) {
+    // Attempts persisted; aggregates may lag until the next successful recompute.
+    return { error: `Saved attempts but stats may be out of date: ${recompute.error}` };
+  }
 
   return { success: true };
 }
