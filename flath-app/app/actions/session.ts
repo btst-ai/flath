@@ -1,6 +1,14 @@
 import { supabase as browserSupabase } from "@/lib/supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+type AttemptRow = {
+  word_id: string;
+  mode: "prod" | "rec";
+  outcome: "know" | "meh" | "forgot";
+  interest_interaction: "fav" | "up" | "down" | "archive" | "none";
+  ts: string;
+};
+
 /**
  * Recompute `user_word_settings` aggregates (avg_success_rate_prod/rec,
  * interest_score, review_count, last_reviewed) for a user across a set of
@@ -17,21 +25,52 @@ export async function recomputeUserWordSettings(
   client: SupabaseClient = browserSupabase,
 ): Promise<{ error?: string }> {
   const uniqueWordIds = Array.from(new Set(wordIds));
+  if (uniqueWordIds.length === 0) return {};
 
-  for (const wId of uniqueWordIds) {
-    const { data: history, error: historyError } = await client
-      .from("attempts_history")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("word_id", wId)
-      .order("ts", { ascending: true });
+  // Batched: one history read for all words (was one per word — the N+1 fix).
+  const { data: allHistory, error: historyError } = await client
+    .from("attempts_history")
+    .select("*")
+    .eq("user_id", userId)
+    .in("word_id", uniqueWordIds);
 
-    if (historyError) {
-      console.error("recomputeUserWordSettings: history read failed", historyError);
-      return { error: historyError.message };
-    }
+  if (historyError) {
+    console.error("recomputeUserWordSettings: history read failed", historyError);
+    return { error: historyError.message };
+  }
 
-    if (!history) continue;
+  // Group rows by word, sorted by ts ascending (matches the prior per-word query order).
+  const historyByWord = new Map<string, AttemptRow[]>();
+  for (const h of (allHistory ?? []) as AttemptRow[]) {
+    const arr = historyByWord.get(h.word_id);
+    if (arr) arr.push(h);
+    else historyByWord.set(h.word_id, [h]);
+  }
+  for (const arr of historyByWord.values()) {
+    arr.sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
+  }
+
+  // Batched: one settings read for the zero-attempts fallback (was one per word).
+  const { data: existingSettings, error: settingsReadError } = await client
+    .from("user_word_settings")
+    .select("word_id, avg_success_rate_prod, avg_success_rate_rec")
+    .eq("user_id", userId)
+    .in("word_id", uniqueWordIds);
+
+  if (settingsReadError) {
+    console.error("recomputeUserWordSettings: settings read failed", settingsReadError);
+    return { error: settingsReadError.message };
+  }
+
+  const settingsByWord = new Map<string, { avg_success_rate_prod: number; avg_success_rate_rec: number }>();
+  for (const s of existingSettings ?? []) {
+    settingsByWord.set(s.word_id, s);
+  }
+
+  const now = new Date().toISOString();
+
+  const rows = uniqueWordIds.map((wId) => {
+    const history = historyByWord.get(wId) ?? [];
 
     let prodAttempts = 0;
     let prodScore = 0;
@@ -64,40 +103,37 @@ export async function recomputeUserWordSettings(
       }
     }
 
-    const { data: currentSettings, error: settingsReadError } = await client
-      .from("user_word_settings")
-      .select("avg_success_rate_prod, avg_success_rate_rec")
-      .eq("user_id", userId)
-      .eq("word_id", wId)
-      .single();
-
-    // PGRST116 = no rows; tolerated (a word may have no settings row yet).
-    if (settingsReadError && settingsReadError.code !== "PGRST116") {
-      console.error("recomputeUserWordSettings: settings read failed", settingsReadError);
-      return { error: settingsReadError.message };
-    }
-
-    const avgProd = prodAttempts > 0 ? (prodScore / prodAttempts) * 100 : (currentSettings?.avg_success_rate_prod ?? 50);
-    const avgRec = recAttempts > 0 ? (recScore / recAttempts) * 100 : (currentSettings?.avg_success_rate_rec ?? 50);
+    const current = settingsByWord.get(wId);
+    const avgProd = prodAttempts > 0 ? (prodScore / prodAttempts) * 100 : (current?.avg_success_rate_prod ?? 50);
+    const avgRec = recAttempts > 0 ? (recScore / recAttempts) * 100 : (current?.avg_success_rate_rec ?? 50);
     const reviewCount = prodAttempts + recAttempts;
 
     const lastCorrect = [...history].reverse().find(h => h.outcome === 'know')?.ts ?? null;
     const lastMistake = [...history].reverse().find(h => h.outcome === 'forgot')?.ts ?? null;
 
-    const { error: updateError } = await client.from("user_word_settings").update({
+    return {
+      user_id: userId,
+      word_id: wId,
       avg_success_rate_prod: avgProd,
       avg_success_rate_rec: avgRec,
       interest_score: interestScore,
       review_count: reviewCount,
-      last_reviewed: new Date().toISOString(),
+      last_reviewed: now,
       last_correct_at: lastCorrect,
       last_mistake_at: lastMistake,
-    }).eq("user_id", userId).eq("word_id", wId);
+    };
+  });
 
-    if (updateError) {
-      console.error("recomputeUserWordSettings: update failed", updateError);
-      return { error: updateError.message };
-    }
+  // Batched: one upsert for all words (was one update per word). Only the
+  // computed columns + PK are sent, so is_fav / is_archived / added_at are
+  // preserved on existing rows.
+  const { error: upsertError } = await client
+    .from("user_word_settings")
+    .upsert(rows, { onConflict: "user_id,word_id" });
+
+  if (upsertError) {
+    console.error("recomputeUserWordSettings: upsert failed", upsertError);
+    return { error: upsertError.message };
   }
 
   return {};
