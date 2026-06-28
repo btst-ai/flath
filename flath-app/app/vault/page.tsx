@@ -1207,6 +1207,7 @@ export default function VaultPage() {
                             (activeTab === "added_by_others" && displayedOthers.length > 0 && selectedWordIds.size === displayedOthers.length)
                           }
                           className="rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                          aria-label="Select all words"
                         />
                       </th>
                     )}
@@ -1254,6 +1255,7 @@ export default function VaultPage() {
                               onChange={() => {}}
                               onClick={(e) => toggleSelection(setting.word_id, index, e.shiftKey)}
                               className="rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                              aria-label={`Select ${vocab?.greek_text ?? "word"}`}
                             />
                           </td>
                         )}
@@ -1294,13 +1296,14 @@ export default function VaultPage() {
                               onClick={() => toggleFav(setting.word_id, isFavorite)}
                               disabled={isArchived}
                               className={`p-1.5 rounded-full transition-colors ${
-                                isArchived 
-                                  ? "cursor-not-allowed text-gray-300" 
-                                  : isFavorite 
-                                    ? "text-yellow-500 hover:bg-yellow-50" 
+                                isArchived
+                                  ? "cursor-not-allowed text-gray-300"
+                                  : isFavorite
+                                    ? "text-yellow-500 hover:bg-yellow-50"
                                     : "text-gray-300 hover:text-yellow-500 hover:bg-gray-100"
                               }`}
                               title={isFavorite ? "Remove favorite" : "Mark as favorite"}
+                              aria-label={isFavorite ? "Remove favourite" : "Mark as favourite"}
                             >
                               <Star className="w-4 h-4" fill={isFavorite ? "currentColor" : "none"} />
                             </button>
@@ -1308,6 +1311,7 @@ export default function VaultPage() {
                               onClick={() => setEditingWord(vocab)}
                               className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
                               title="Edit word"
+                              aria-label="Edit word"
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
@@ -1320,17 +1324,19 @@ export default function VaultPage() {
                                   : "text-gray-400 hover:text-orange-500 hover:bg-orange-50"
                               }`}
                               title="Mark as mistake"
+                              aria-label="Mark as mistake"
                             >
                               <AlertTriangle className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => archiveWord(setting.word_id, isArchived)}
                               className={`p-1.5 rounded-full transition-colors ${
-                                isArchived 
-                                  ? "text-blue-500 hover:text-blue-600 hover:bg-blue-50" 
+                                isArchived
+                                  ? "text-blue-500 hover:text-blue-600 hover:bg-blue-50"
                                   : "text-gray-400 hover:text-red-600 hover:bg-red-50"
                               }`}
                               title={isArchived ? "Restore to Library" : "Remove from Library"}
+                              aria-label={isArchived ? "Restore to library" : "Archive word"}
                             >
                               {isArchived ? <UploadCloud className="w-4 h-4" /> : <Trash2 className="w-4 h-4" />}
                             </button>
@@ -1355,6 +1361,7 @@ export default function VaultPage() {
                               onChange={() => {}}
                               onClick={(e) => toggleSelection(vocab.id, index, e.shiftKey)}
                               className="rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                              aria-label={`Select ${vocab?.greek_text ?? "word"}`}
                             />
                           </td>
                         )}
@@ -1398,6 +1405,7 @@ export default function VaultPage() {
                               disabled={removeOtherInFlight === vocab.id}
                               className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Remove (archive)"
+                              aria-label="Remove from view"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
