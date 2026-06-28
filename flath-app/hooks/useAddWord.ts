@@ -113,34 +113,47 @@ export function useAddWord() {
             }
           }
         } else {
-          // 2. Word doesn't exist, get frequency (use provided rank if available) and insert
+          // 2. Word doesn't exist. Get frequency (use provided rank if available),
+          // then create the word and the user's settings row atomically via the
+          // add_word_for_user RPC — a single transaction so a failure can't leave
+          // an orphaned words_dim row with no user_word_settings.
           const frequency = word.frequency_rank ?? await getWordFrequency(word.greek_text);
 
-          const { data: newWordData, error: insertError } = await supabase
-            .from("words_dim")
-            .insert({
-              greek_text: word.greek_text,
-              french_text: word.french_text,
-              part_of_speech: word.part_of_speech,
-              theme: word.theme,
-              frequency_rank: frequency,
-              created_by_user_id: userId,
+          const { data: newWordData, error: rpcError } = await supabase
+            .rpc("add_word_for_user", {
+              p_greek: word.greek_text,
+              p_french: word.french_text,
+              p_pos: word.part_of_speech,
+              p_theme: word.theme,
+              p_frequency_rank: frequency,
             })
-            .select()
             .single();
 
-          if (insertError) {
-            toast.error(`Failed to add ${word.greek_text}: ${insertError.message}`);
+          if (rpcError || !newWordData) {
+            toast.error(`Failed to add ${word.greek_text}: ${rpcError?.message ?? "unknown error"}`);
             continue;
           }
-          
-          finalWordId = newWordData.id;
+
           finalWordData = newWordData;
+          finalWordId = finalWordData.id;
+
+          successCount++;
+          addedWordsStats.push({
+            id: finalWordData.id,
+            greek_text: finalWordData.greek_text || "",
+            french_text: finalWordData.french_text || "",
+            theme: finalWordData.theme || "General",
+            part_of_speech: finalWordData.part_of_speech || "Autre",
+            frequency_rank: finalWordData.frequency_rank || 99999,
+          });
+          continue;
         }
 
-        // 3. Upsert into user_word_settings
-        // added_at defaults to now() in the DB; set it explicitly here so the
-        // "Added last X days" vault filter works immediately on new words.
+        // 3. Existing word (kept or overwritten above): ensure the user has a
+        // settings row linking them to it. New words already got theirs in the
+        // atomic RPC above, so this only runs on the existing-word path.
+        // added_at is set explicitly so the "Added last X days" vault filter
+        // works immediately.
         const { error: settingsError } = await supabase
           .from("user_word_settings")
           .upsert({

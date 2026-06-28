@@ -406,6 +406,52 @@ CREATE POLICY "users read own role"
 
 
 -- ============================================================================
+-- FUNCTION: add_word_for_user (atomic new-word creation)
+-- ============================================================================
+-- Inserts a words_dim row and the author's user_word_settings row in one
+-- transaction. SECURITY DEFINER, but forces created_by_user_id/user_id to
+-- auth.uid() and raises if unauthenticated. See sql/add_word_rpc.sql.
+
+CREATE OR REPLACE FUNCTION public.add_word_for_user(
+  p_greek          TEXT,
+  p_french         TEXT,
+  p_pos            TEXT,
+  p_theme          TEXT,
+  p_frequency_rank INT
+)
+RETURNS public.words_dim
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid  UUID := auth.uid();
+  v_row  public.words_dim;
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'add_word_for_user: not authenticated';
+  END IF;
+
+  INSERT INTO public.words_dim (
+    greek_text, french_text, part_of_speech, theme, frequency_rank, created_by_user_id
+  )
+  VALUES (p_greek, p_french, p_pos, p_theme, p_frequency_rank, v_uid)
+  RETURNING * INTO v_row;
+
+  INSERT INTO public.user_word_settings (
+    user_id, word_id, avg_success_rate_prod, avg_success_rate_rec, added_at
+  )
+  VALUES (v_uid, v_row.id, 50, 50, now())
+  ON CONFLICT (user_id, word_id) DO NOTHING;
+
+  RETURN v_row;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.add_word_for_user(TEXT, TEXT, TEXT, TEXT, INT) TO authenticated;
+
+
+-- ============================================================================
 -- END OF BASELINE
 -- ============================================================================
 -- Next step: diff this file against `pg_dump --schema-only` output (or the
