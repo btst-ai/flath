@@ -122,6 +122,29 @@ This prints the current PoS distribution and lists any rows that would be rewrit
 
 ## Changelog
 
+### Phase 3.5 — Flash fix, in-session vault, mistake tagging, vault/pack fixes (June 2026)
+
+**Practice — bug fixes**
+- Fixed the answer-side flash when advancing to the next card in both solo practice and duel mode. The card now stays on its hidden/front face through the data swap instead of briefly painting the next (or previous) card's translation. Solo gates card content to the unflipped face (`displayWordRef`) and settles the flip before the queue advances; duel renders the answer face only while flipped.
+- Fixed a crash when opening the Edit Word modal from inside an active practice session (null-safe `words_dim` handling in the session refresh).
+- Progress pill now resets recycled cards to ⚫ Not seen yet when a new review cycle (Review #N) begins, instead of leaving them stuck under 🔴 Forgot / 🟡 Unsure. 🟢 Mastered is preserved across cycles.
+
+**Practice — performance**
+- Attempts now save to the background in batches (~every 5 cards) instead of one large write at session end, so ending a session no longer hangs on a long save. An in-flight guard plus a synchronous flush cursor prevent overlapping flushes from double-inserting; the end-of-session flush sends only the remainder.
+
+**In-session vault & mistake tagging**
+- New in-session Vault drawer: search, view, edit, and one-tap "Add a Mistake" without leaving or disrupting the active practice session.
+- AddWordModal has an "Add a mistake" checkbox (default on) — a word saved with it checked is immediately recorded as a `forgot` attempt so it ranks down and surfaces in Mistake Fix.
+- One-tap "Add a Mistake" quick-action on word rows in the main Vault and the in-session drawer (shared `markWordAsMistake` helper).
+
+**Vault & word management**
+- Removed the Frequency / Difficulty field from the Add and Edit Word modals. New words still get an auto-derived frequency rank; editing no longer changes it.
+- Fixed the "Added last X days" temporal filter — it now queries a real per-user `added_at` timestamp on `user_word_settings` instead of a non-existent word-creation field. Requires running `flath-app/sql/add_added_at.sql` once in Supabase (adds + backfills the column).
+- Word packs can now be renamed inline (owner-only; requires `flath-app/sql/word_packs_rename_policy.sql`).
+- Inline archive/remove action added to "Added by others" rows (add-then-archive).
+
+---
+
 ### Phase 3.4 — Practice pill redesign and Add Word UX (May 2026)
 
 **Practice**
