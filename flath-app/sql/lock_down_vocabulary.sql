@@ -1,0 +1,45 @@
+-- Drop public.vocabulary to close a full-read/write RLS exposure.
+-- Run once in Supabase SQL Editor. Idempotent (DROP TABLE IF EXISTS).
+--
+-- Why this table is being dropped:
+--   The table had an RLS policy named "Public Access" defined as
+--   FOR ALL TO public USING (true) WITH CHECK (true).
+--   Postgres ORs same-command policies, so this overrides every narrower
+--   own-row policy on the table and makes it fully readable and writable by
+--   anyone who holds the publicly shipped anon key — including unauthenticated
+--   clients. The app does not use this table (all vocabulary is read from
+--   words_dim); a repo-wide search found zero .from("vocabulary") calls in
+--   flath-app/{app,lib,hooks,components}. Dropping the table removes the
+--   attack surface entirely.
+--
+-- No Supabase CLI or psql in this repo — run directly in the Supabase SQL Editor.
+
+-- ─── OPTIONAL PRE-FLIGHT INSPECTION (run these first to confirm before dropping) ───
+--
+-- How much data is in the table?
+--   select count(*) from public.vocabulary;
+--
+-- What does it look like?
+--   select * from public.vocabulary limit 20;
+--
+-- What dependent objects would CASCADE remove?
+--   (Note: this query finds view dependents only; FK-dependent tables appear in
+--    pg_constraint, not pg_rewrite. The app schema has no FK references to this table.)
+--   select dependent_ns.nspname as dep_schema, dependent.relname as dep_object
+--   from pg_depend d
+--   join pg_rewrite r on r.oid = d.objid
+--   join pg_class dependent on dependent.oid = r.ev_class
+--   join pg_namespace dependent_ns on dependent_ns.oid = dependent.relnamespace
+--   join pg_class src on src.oid = d.refobjid
+--   where src.relname = 'vocabulary' and src.relnamespace = 'public'::regnamespace
+--     and dependent.relname <> 'vocabulary';
+
+DROP TABLE IF EXISTS public.vocabulary CASCADE;
+
+-- ─── POST-RUN VERIFICATION ───
+--
+-- Confirm the table is gone (expect NULL):
+--   select to_regclass('public.vocabulary');
+--
+-- Confirm no policies remain (expect 0 rows):
+--   select tablename, policyname from pg_policies where tablename = 'vocabulary';
