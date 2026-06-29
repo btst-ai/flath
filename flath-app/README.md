@@ -135,7 +135,7 @@ flath-app/
 │   ├── surface.ts        # useSurface() hook — desktop / mobile-web / pwa
 │   └── supabase.ts       # Supabase client
 ├── public/               # Static assets (icons, anthems)
-├── sql/                  # Reference SQL (duels policies, schema notes)
+├── sql/                  # Reference SQL: reconstructed schema, RLS migrations, RPCs, duel policies
 ├── AGENTS.md             # Warning: Next.js 16 breaking changes
 └── CLAUDE.md             # Surface-gating rules and coding discipline
 ```
