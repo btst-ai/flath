@@ -106,7 +106,7 @@ function buildStackedBarData(
 
   for (const w of wordsAdded) {
     const d = new Date(w.added_at);
-    const label = `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
+    const label = `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     const dayIdx = dayIndexMap.get(label);
     if (dayIdx === undefined) continue;
     const theme = w.theme ?? "Untagged";
@@ -329,18 +329,18 @@ export default function ProgressPage() {
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
               <p className="text-xs text-gray-500 mb-1">Production (Greek → French)</p>
-              <p className="text-3xl font-bold text-gray-900">{Math.round(prodAvg * 100)}%</p>
+              <p className="text-3xl font-bold text-gray-900">{Math.round(prodAvg)}%</p>
             </div>
             <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
               <p className="text-xs text-gray-500 mb-1">Recognition (French → Greek)</p>
-              <p className="text-3xl font-bold text-gray-900">{Math.round(recAvg * 100)}%</p>
+              <p className="text-3xl font-bold text-gray-900">{Math.round(recAvg)}%</p>
             </div>
           </div>
-          {lineGap > 0.1 && (prodAvg > 0 || recAvg > 0) && (
+          {lineGap > 10 && (prodAvg > 0 || recAvg > 0) && (
             <p className="mt-2 text-xs text-gray-500">
               {recAvg > prodAvg
-                ? `You recognise ${Math.round((recAvg - prodAvg) * 100)}pp more than you can produce — focus on production drills.`
-                : `Production is ahead of recognition by ${Math.round((prodAvg - recAvg) * 100)}pp.`}
+                ? `You recognise ${Math.round(recAvg - prodAvg)}pp more than you can produce — focus on production drills.`
+                : `Production is ahead of recognition by ${Math.round(prodAvg - recAvg)}pp.`}
             </p>
           )}
         </section>

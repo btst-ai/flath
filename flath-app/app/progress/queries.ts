@@ -1,30 +1,21 @@
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
-function toLocalDateString(ts: string): string {
-  const d = new Date(ts);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-// Fetch distinct local-timezone date strings from attempts_history over last 90 days.
-export async function fetchStreakDates(userId: string): Promise<string[]> {
-  const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-  const { data, error } = await supabase
-    .from("attempts_history")
-    .select("ts")
-    .eq("user_id", userId)
-    .gte("ts", since);
+// Fetch distinct local-timezone date strings via RPC (immune to PostgREST 1000-row cap).
+// The streak_dates RPC returns O(days) rows rather than O(attempts), so high-volume
+// users never have today's rows silently truncated out of the result set.
+export async function fetchStreakDates(_userId: string): Promise<string[]> {
+  const { data, error } = await supabase.rpc("streak_dates", {
+    p_days: 90,
+    p_tz: "Europe/Athens",
+  });
 
   if (error) {
     toast.error("Failed to load streak data");
     return [];
   }
 
-  const dateSet = new Set((data ?? []).map((r) => toLocalDateString(r.ts)));
-  return Array.from(dateSet);
+  return (data ?? []).map((r: { day: string }) => r.day);
 }
 
 // Count distinct word_ids practiced in last 7 days.
@@ -34,7 +25,9 @@ export async function fetchDistinctWords7d(userId: string): Promise<number> {
     .from("attempts_history")
     .select("word_id")
     .eq("user_id", userId)
-    .gte("ts", since);
+    .gte("ts", since)
+    .order("ts", { ascending: false })
+    .limit(10000);
 
   if (error) {
     toast.error("Failed to load vocabulary stats");
@@ -70,7 +63,9 @@ export async function fetchAttemptsLast30d(userId: string): Promise<
     .from("attempts_history")
     .select("ts, word_id, outcome")
     .eq("user_id", userId)
-    .gte("ts", since);
+    .gte("ts", since)
+    .order("ts", { ascending: false })
+    .limit(20000);
 
   if (error) {
     toast.error("Failed to load practice history");

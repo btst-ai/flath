@@ -151,7 +151,7 @@ CREATE TABLE IF NOT EXISTS public.user_word_settings (
   last_reviewed          TIMESTAMPTZ,
   last_correct_at        TIMESTAMPTZ,                    -- added by add_last_correct_mistake.sql
   last_mistake_at        TIMESTAMPTZ,                    -- added by add_last_correct_mistake.sql
-  added_at               TIMESTAMPTZ          DEFAULT now(), -- added by add_added_at.sql
+  added_at               TIMESTAMPTZ NOT NULL DEFAULT now(), -- added by add_added_at.sql; NOT NULL enforced after backfill
   PRIMARY KEY (user_id, word_id)
 );
 
@@ -449,6 +449,29 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.add_word_for_user(TEXT, TEXT, TEXT, TEXT, INT) TO authenticated;
+
+-- Streak dates RPC — returns distinct calendar dates with any attempt, for
+-- the authenticated user, over the last p_days days in the given IANA timezone.
+-- Returns O(days) rows; immune to the PostgREST 1000-row default cap.
+-- See sql/add_streak_rpc.sql for the full annotated migration.
+CREATE OR REPLACE FUNCTION public.streak_dates(
+  p_days INT    DEFAULT 90,
+  p_tz   TEXT   DEFAULT 'Europe/Athens'
+)
+RETURNS TABLE(day DATE)
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = public
+AS $$
+  SELECT DISTINCT (ts AT TIME ZONE p_tz)::date AS day
+  FROM public.attempts_history
+  WHERE user_id = auth.uid()
+    AND ts >= now() - make_interval(days => p_days)
+  ORDER BY day;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.streak_dates(INT, TEXT) TO authenticated;
 
 
 -- ============================================================================

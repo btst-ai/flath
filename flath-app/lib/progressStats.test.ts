@@ -28,8 +28,8 @@ function makeWord(overrides: Partial<UserWordSetting> = {}): UserWordSetting {
     greek_text: "λέξη",
     theme: "food",
     is_archived: false,
-    avg_success_rate_prod: 0.5,
-    avg_success_rate_rec: 0.5,
+    avg_success_rate_prod: 50,
+    avg_success_rate_rec: 50,
     review_count: 5,
     last_reviewed: null,
     last_mistake_at: null,
@@ -199,11 +199,23 @@ describe("buildStrugglingPool", () => {
     expect(buildStrugglingPool(words)).toHaveLength(1);
   });
 
-  it("weight formula: weight = (1 - blend) + 0.1", () => {
-    // Both rates 0.5, equal counts → blend = 0.5, weight = 0.6
-    const words = [makeWord({ avg_success_rate_prod: 0.5, avg_success_rate_rec: 0.5, review_count: 10 })];
+  it("weight formula: weight = (1 - blend/100) + 0.1 on 0-100 stored scale", () => {
+    // Both rates 50 (0-100 scale), equal counts → blend = 50, weight = (1 - 50/100) + 0.1 = 0.6
+    const words = [makeWord({ avg_success_rate_prod: 50, avg_success_rate_rec: 50, review_count: 10 })];
     const pool = buildStrugglingPool(words);
     expect(pool[0].weight).toBeCloseTo(0.6, 5);
+  });
+
+  it("weight is 0.1 (minimum) for perfect recall (rates 100/100)", () => {
+    const words = [makeWord({ avg_success_rate_prod: 100, avg_success_rate_rec: 100, review_count: 10 })];
+    const pool = buildStrugglingPool(words);
+    expect(pool[0].weight).toBeCloseTo(0.1, 5);
+  });
+
+  it("weight is 1.1 (maximum) for zero recall (rates 0/0)", () => {
+    const words = [makeWord({ avg_success_rate_prod: 0, avg_success_rate_rec: 0, review_count: 10 })];
+    const pool = buildStrugglingPool(words);
+    expect(pool[0].weight).toBeCloseTo(1.1, 5);
   });
 });
 

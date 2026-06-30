@@ -83,6 +83,7 @@ export function weightedSample<T>(
 }
 
 // Pool for "struggling" list: non-archived words with review_count >= 3.
+// avg_success_rate_* are on the 0-100 storage scale; divide by 100 to get a valid 0-1 weight.
 export function buildStrugglingPool(settings: UserWordSetting[]): WeightedItem<UserWordSetting>[] {
   return settings
     .filter((s) => !s.is_archived && s.review_count >= 3)
@@ -93,11 +94,12 @@ export function buildStrugglingPool(settings: UserWordSetting[]): WeightedItem<U
         s.review_count,
         s.review_count
       );
-      return { item: s, weight: (1 - blend) + 0.1 };
+      return { item: s, weight: (1 - blend / 100) + 0.1 };
     });
 }
 
 // Pool for "forgetting" list: last_mistake_at > 7d ago AND last_reviewed > 7d ago.
+// avg_success_rate_* are on the 0-100 storage scale; divide by 100 to get a valid 0-1 weight.
 export function buildForgettingPool(
   settings: UserWordSetting[],
   nowMs: number
@@ -120,7 +122,7 @@ export function buildForgettingPool(
         s.review_count,
         s.review_count
       );
-      return { item: s, weight: (1 - blend) + 0.1 };
+      return { item: s, weight: (1 - blend / 100) + 0.1 };
     });
 }
 
