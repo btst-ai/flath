@@ -135,7 +135,7 @@ This prints the current PoS distribution and lists any rows that would be rewrit
 
 **Section labels**
 - `(30d)` removed from "Words seen by theme" and "Words added per day by theme" headings; replaced with a greyed italic "Last 30 days" subtitle.
-- "Duels" section gains an "All time" italic subtitle.
+- "Duels" section subtitle changed from "All time" to "Last 30 days"; query now filters to the last 30 days only.
 
 **Dashboard counters**
 - "Words (7d)" and "Added (7d)" labels simplified to "Words" and "Added".

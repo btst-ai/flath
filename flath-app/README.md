@@ -24,6 +24,7 @@ Built with Next.js 16 (App Router), Supabase, and Tailwind CSS. Deployed on Verc
 - Section headings use greyed italic subtitles instead of inline `(30d)` labels.
 - Home dashboard counters: `(7d)` suffix removed; "This week" header added above the grid. Zero-activity state shows "Let's get started".
 - Bugfix: excluded a known June 2026 backfill date from words-added queries to prevent inflated counts.
+- Duel W/L/T summary now shows last 30 days only (was all-time); subtitle updated to "Last 30 days".
 
 ### Phase 3.6.1 — Progress tracker bugfixes (prior)
 

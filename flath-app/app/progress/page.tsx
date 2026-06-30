@@ -468,7 +468,7 @@ export default function ProgressPage() {
         {/* Section 7: Duels */}
         <section>
           <h2 className="text-base font-semibold text-gray-800 mb-1">Duels</h2>
-          <p className="text-xs italic text-gray-400 mb-3">All time</p>
+          <p className="text-xs italic text-gray-400 mb-3">Last 30 days</p>
           <div className="grid grid-cols-3 gap-4">
             <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
               <p className="text-xs text-green-700 mb-1">Wins</p>
