@@ -1,5 +1,7 @@
 "use client";
 
+import { useState, useEffect, useRef } from "react";
+
 interface BarSeries {
   label: string;
   color: string;
@@ -36,8 +38,26 @@ export function StackedBarChart({ days, series, ariaLabel = "Stacked bar chart" 
 
   const labelStep = Math.max(1, Math.floor(n / 6));
 
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: TouchEvent) => {
+      if (!containerRef.current?.contains(e.target as Node)) {
+        setHoverIdx(null);
+      }
+    };
+    document.addEventListener("touchstart", handler);
+    return () => document.removeEventListener("touchstart", handler);
+  }, []);
+
+  const tooltipLeft =
+    hoverIdx !== null
+      ? Math.min(85, Math.max(0, (hoverIdx / Math.max(1, n - 1)) * 100))
+      : 0;
+
   return (
-    <div className="w-full">
+    <div className="w-full relative" ref={containerRef}>
       <svg
         viewBox={`0 0 ${w} ${h}`}
         className="w-full h-auto"
@@ -82,11 +102,58 @@ export function StackedBarChart({ days, series, ariaLabel = "Stacked bar chart" 
             </text>
           ) : null
         )}
-        {/* Y-axis max */}
-        <text x={padX - 4} y={padY + 4} textAnchor="end" fontSize={9} fill="#9ca3af">
-          {maxTotal}
-        </text>
+        {/* Hover guide */}
+        {hoverIdx !== null && (
+          <line
+            x1={xFor(hoverIdx) + barW / 2}
+            x2={xFor(hoverIdx) + barW / 2}
+            y1={padY}
+            y2={yBase}
+            stroke="#d1d5db"
+            strokeWidth={1}
+          />
+        )}
+        {/* Hit zones — rendered last so they sit on top */}
+        {days.map((_, i) => (
+          <rect
+            key={`hit-${i}`}
+            x={xFor(i)}
+            y={padY}
+            width={barGap}
+            height={innerH + 20}
+            fill="transparent"
+            onMouseEnter={() => setHoverIdx(i)}
+            onMouseLeave={() => setHoverIdx(null)}
+            onTouchStart={(e) => { e.preventDefault(); setHoverIdx(i); }}
+          />
+        ))}
       </svg>
+      {/* Tooltip */}
+      {hoverIdx !== null && (
+        <div
+          className="bg-white border border-gray-200 rounded shadow-md px-3 py-2 text-xs z-10 pointer-events-none min-w-max"
+          style={{
+            position: "absolute",
+            left: `${tooltipLeft}%`,
+            top: "8px",
+            transform: tooltipLeft > 50 ? "translateX(-100%)" : "translateX(0)",
+          }}
+        >
+          <div className="font-medium mb-1">{days[hoverIdx]}</div>
+          {series
+            .filter((si) => si.values[hoverIdx] > 0)
+            .map((si) => (
+              <div key={si.label} className="flex items-center gap-1">
+                <span
+                  className="inline-block w-2 h-2 rounded-full"
+                  style={{ backgroundColor: si.color }}
+                />
+                {si.label}: {si.values[hoverIdx]}
+              </div>
+            ))}
+          <div className="mt-1 font-medium">Total: {dayTotals[hoverIdx]}</div>
+        </div>
+      )}
       {/* Legend */}
       <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-600">
         {series.map((s) => (

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { LineChartMulti, PieChart, StackedBarChart } from "@/components/charts";
+import { submitSessionAttempts } from "@/app/actions/session";
+import { toast } from "sonner";
 import {
   computeStreak,
   weightedAverage,
@@ -35,6 +37,12 @@ const PIE_COLORS = [
 
 function toLocalDateString(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function fmtDay(iso: string): string {
+  const [, m, d] = iso.split("-").map(Number);
+  return `${d} ${MONTHS[m - 1]}`;
 }
 
 interface DuelStats {
@@ -70,11 +78,18 @@ function buildThemePieData(
     themeCounts.get(theme)!.add(a.wordId);
   }
   const sorted = Array.from(themeCounts.entries()).sort((a, b) => b[1].size - a[1].size);
-  return sorted.map(([label, wordSet], i) => ({
+  const top = sorted.slice(0, 6);
+  const rest = sorted.slice(6);
+  const result = top.map(([label, wordSet], i) => ({
     label,
     value: wordSet.size,
     color: PIE_COLORS[i % PIE_COLORS.length],
   }));
+  if (rest.length > 0) {
+    const othersValue = rest.reduce((sum, [, wordSet]) => sum + wordSet.size, 0);
+    result.push({ label: "Others", value: othersValue, color: "#9ca3af" });
+  }
+  return result;
 }
 
 function buildStackedBarData(
@@ -83,26 +98,41 @@ function buildStackedBarData(
   days: number
 ): { dayLabels: string[]; series: Array<{ label: string; color: string; values: number[] }> } {
   const today = new Date(nowMs);
-  const dayLabels: string[] = [];
+  const dayKeys: string[] = [];
+  const dayDisplayLabels: string[] = [];
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
     const s = toLocalDateString(d);
-    // Short label: MM/DD
-    dayLabels.push(s.slice(5));
+    dayKeys.push(s.slice(5));         // MM-DD for matching
+    dayDisplayLabels.push(fmtDay(s)); // "D Mon" for display
   }
 
   const themes = new Set(wordsAdded.map((w) => w.theme ?? "Untagged"));
   const themeList = Array.from(themes).sort();
-  const dayIndexMap = new Map(dayLabels.map((label, i) => [label, i]));
+  const dayIndexMap = new Map(dayKeys.map((label, i) => [label, i]));
 
-  const seriesData: Array<{ label: string; color: string; values: number[] }> = themeList.map(
-    (theme, i) => ({
+  // Pre-pass: compute per-theme totals to determine top-6.
+  const themeTotals = new Map<string, number>();
+  for (const w of wordsAdded) {
+    const theme = w.theme ?? "Untagged";
+    themeTotals.set(theme, (themeTotals.get(theme) ?? 0) + 1);
+  }
+  const sortedThemes = Array.from(themeTotals.entries()).sort((a, b) => b[1] - a[1]);
+  const top6Themes = new Set(sortedThemes.slice(0, 6).map(([t]) => t));
+
+  const seriesData: Array<{ label: string; color: string; values: number[] }> = themeList
+    .filter((theme) => top6Themes.has(theme))
+    .map((theme, i) => ({
       label: theme,
       color: PIE_COLORS[i % PIE_COLORS.length],
       values: new Array(days).fill(0),
-    })
-  );
+    }));
+
+  const hasOthers = themeList.some((t) => !top6Themes.has(t));
+  if (hasOthers) {
+    seriesData.push({ label: "Others", color: "#9ca3af", values: new Array(days).fill(0) });
+  }
 
   for (const w of wordsAdded) {
     const d = new Date(w.added_at);
@@ -110,16 +140,62 @@ function buildStackedBarData(
     const dayIdx = dayIndexMap.get(label);
     if (dayIdx === undefined) continue;
     const theme = w.theme ?? "Untagged";
-    const seriesEntry = seriesData.find((s) => s.label === theme);
+    const targetLabel = top6Themes.has(theme) ? theme : "Others";
+    const seriesEntry = seriesData.find((s) => s.label === targetLabel);
     if (seriesEntry) seriesEntry.values[dayIdx]++;
   }
 
-  return { dayLabels, series: seriesData };
+  return { dayLabels: dayDisplayLabels, series: seriesData };
+}
+
+function WordReviewRow({
+  word,
+  mark,
+  isPending,
+  onMark,
+}: {
+  word: UserWordSetting;
+  mark?: "know" | "forgot";
+  isPending: boolean;
+  onMark: (outcome: "know" | "forgot") => void;
+}) {
+  return (
+    <li className="bg-white border border-gray-200 rounded-lg px-3 py-2 flex items-center gap-3">
+      <button
+        onClick={() => onMark("forgot")}
+        disabled={isPending}
+        aria-label={`Mark ${word.greek_text} as forgotten`}
+        className={`p-1 rounded-full transition ${
+          mark === "forgot"
+            ? "bg-red-100 ring-2 ring-red-300"
+            : "hover:bg-red-50"
+        } disabled:opacity-40`}
+      >
+        👎
+      </button>
+      <span className="flex-1 text-gray-900 font-medium text-center" lang="el">
+        {word.greek_text}
+      </span>
+      <button
+        onClick={() => onMark("know")}
+        disabled={isPending}
+        aria-label={`Mark ${word.greek_text} as known`}
+        className={`p-1 rounded-full transition ${
+          mark === "know"
+            ? "bg-green-100 ring-2 ring-green-300"
+            : "hover:bg-green-50"
+        } disabled:opacity-40`}
+      >
+        👍
+      </button>
+    </li>
+  );
 }
 
 export default function ProgressPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [uid, setUid] = useState<string | null>(null);
 
   // Computed state
   const [streakLabel, setStreakLabel] = useState("—");
@@ -134,6 +210,23 @@ export default function ProgressPage() {
   const [stackedDays, setStackedDays] = useState<string[]>([]);
   const [stackedSeries, setStackedSeries] = useState<Array<{ label: string; color: string; values: number[] }>>([]);
   const [duelStats, setDuelStats] = useState<DuelStats>({ wins: 0, losses: 0, ties: 0 });
+  const [marks, setMarks] = useState<Record<string, "know" | "forgot">>({});
+  const [pending, setPending] = useState<Record<string, boolean>>({});
+
+  async function handleMark(wordId: string, outcome: "know" | "forgot") {
+    if (!uid) return;
+    setPending((prev) => ({ ...prev, [wordId]: true }));
+    const result = await submitSessionAttempts(uid, [
+      { word_id: wordId, mode: "rec", outcome, interest_interaction: "none" },
+    ]);
+    if ("error" in result) {
+      toast.error(result.error);
+    } else {
+      setMarks((prev) => ({ ...prev, [wordId]: outcome }));
+      toast.success(outcome === "know" ? "Recorded 👍" : "Recorded 👎");
+    }
+    setPending((prev) => ({ ...prev, [wordId]: false }));
+  }
 
   async function loadAll(uid: string) {
     const nowMs = Date.now();
@@ -210,6 +303,7 @@ export default function ProgressPage() {
         router.push("/login");
         return;
       }
+      setUid(data.user.id);
       await loadAll(data.user.id);
       setLoading(false);
     };
@@ -224,7 +318,7 @@ export default function ProgressPage() {
     );
   }
 
-  const lineDayLabels = lineBuckets.map((b) => b.date.slice(5)); // MM-DD
+  const lineDayLabels = lineBuckets.map((b) => fmtDay(b.date));
   const lineGap = Math.abs(recAvg - prodAvg);
 
   return (
@@ -276,13 +370,13 @@ export default function ProgressPage() {
               {showStruggling && (
                 <ul className="mt-3 space-y-2">
                   {struggling.map((w) => (
-                    <li
+                    <WordReviewRow
                       key={w.word_id}
-                      className="bg-white border border-gray-200 rounded-lg px-4 py-2 text-gray-900 font-medium"
-                      lang="el"
-                    >
-                      {w.greek_text}
-                    </li>
+                      word={w}
+                      mark={marks[w.word_id]}
+                      isPending={pending[w.word_id] ?? false}
+                      onMark={(outcome) => handleMark(w.word_id, outcome)}
+                    />
                   ))}
                 </ul>
               )}
@@ -309,13 +403,13 @@ export default function ProgressPage() {
               {showForgetting && (
                 <ul className="mt-3 space-y-2">
                   {forgetting.map((w) => (
-                    <li
+                    <WordReviewRow
                       key={w.word_id}
-                      className="bg-white border border-gray-200 rounded-lg px-4 py-2 text-gray-900 font-medium"
-                      lang="el"
-                    >
-                      {w.greek_text}
-                    </li>
+                      word={w}
+                      mark={marks[w.word_id]}
+                      isPending={pending[w.word_id] ?? false}
+                      onMark={(outcome) => handleMark(w.word_id, outcome)}
+                    />
                   ))}
                 </ul>
               )}
@@ -348,7 +442,8 @@ export default function ProgressPage() {
         {/* Section 5: Theme pie */}
         {themePie.length > 0 && (
           <section>
-            <h2 className="text-base font-semibold text-gray-800 mb-3">Words seen by theme (30d)</h2>
+            <h2 className="text-base font-semibold text-gray-800 mb-1">Words seen by theme</h2>
+            <p className="text-xs italic text-gray-400 mb-3">Last 30 days</p>
             <PieChart
               slices={themePie}
               ariaLabel="Pie chart showing distinct words practiced in the last 30 days broken down by theme"
@@ -359,7 +454,8 @@ export default function ProgressPage() {
         {/* Section 6: Words added stacked bar */}
         {stackedSeries.length > 0 && (
           <section>
-            <h2 className="text-base font-semibold text-gray-800 mb-3">Words added per day by theme (30d)</h2>
+            <h2 className="text-base font-semibold text-gray-800 mb-1">Words added per day by theme</h2>
+            <p className="text-xs italic text-gray-400 mb-3">Last 30 days</p>
             <StackedBarChart
               days={stackedDays}
               series={stackedSeries}
@@ -370,7 +466,8 @@ export default function ProgressPage() {
 
         {/* Section 7: Duels */}
         <section>
-          <h2 className="text-base font-semibold text-gray-800 mb-3">Duels</h2>
+          <h2 className="text-base font-semibold text-gray-800 mb-1">Duels</h2>
+          <p className="text-xs italic text-gray-400 mb-3">All time</p>
           <div className="grid grid-cols-3 gap-4">
             <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
               <p className="text-xs text-green-700 mb-1">Wins</p>

@@ -1,5 +1,7 @@
 "use client";
 
+import { useState, useEffect, useRef } from "react";
+
 interface Series {
   label: string;
   color: string;
@@ -13,6 +15,19 @@ interface Props {
 }
 
 export function LineChartMulti({ series, labels, ariaLabel = "Line chart" }: Props) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: TouchEvent) => {
+      if (!containerRef.current?.contains(e.target as Node)) {
+        setHoverIdx(null);
+      }
+    };
+    document.addEventListener("touchstart", handler);
+    return () => document.removeEventListener("touchstart", handler);
+  }, []);
+
   const w = 600;
   const h = 200;
   const padX = 32;
@@ -35,8 +50,15 @@ export function LineChartMulti({ series, labels, ariaLabel = "Line chart" }: Pro
   // Show every ~7th label to avoid crowding on 30-day views
   const labelStep = Math.max(1, Math.floor(n / 6));
 
+  const barW = innerW / Math.max(1, n - 1);
+
+  const tooltipLeft =
+    hoverIdx !== null
+      ? Math.min(85, Math.max(0, (hoverIdx / Math.max(1, n - 1)) * 100))
+      : 0;
+
   return (
-    <div className="w-full">
+    <div className="w-full relative" ref={containerRef}>
       <svg
         viewBox={`0 0 ${w} ${h}`}
         className="w-full h-auto"
@@ -62,6 +84,25 @@ export function LineChartMulti({ series, labels, ariaLabel = "Line chart" }: Pro
             strokeLinecap="round"
           />
         ))}
+        {/* Hover guide */}
+        {hoverIdx !== null && (
+          <>
+            <line
+              x1={xFor(hoverIdx)} x2={xFor(hoverIdx)}
+              y1={padY} y2={padY + innerH}
+              stroke="#d1d5db" strokeWidth={1}
+            />
+            {series.map((s) => (
+              <circle
+                key={s.label}
+                cx={xFor(hoverIdx)}
+                cy={yFor(s.values[hoverIdx])}
+                r={3}
+                fill={s.color}
+              />
+            ))}
+          </>
+        )}
         {/* X-axis labels */}
         {labels.map((label, i) =>
           i % labelStep === 0 ? (
@@ -77,11 +118,44 @@ export function LineChartMulti({ series, labels, ariaLabel = "Line chart" }: Pro
             </text>
           ) : null
         )}
-        {/* Y-axis max label */}
-        <text x={padX - 4} y={padY + 4} textAnchor="end" fontSize={9} fill="#9ca3af">
-          {rawMax}
-        </text>
+        {/* Hit zones (transparent, per day index) — rendered last to sit on top */}
+        {labels.map((_, i) => (
+          <rect
+            key={i}
+            x={xFor(i) - barW / 2}
+            y={padY}
+            width={barW}
+            height={innerH + 20}
+            fill="transparent"
+            onMouseEnter={() => setHoverIdx(i)}
+            onMouseLeave={() => setHoverIdx(null)}
+            onTouchStart={(e) => { e.preventDefault(); setHoverIdx(i); }}
+          />
+        ))}
       </svg>
+      {/* Tooltip overlay */}
+      {hoverIdx !== null && (
+        <div
+          className="bg-white border border-gray-200 rounded shadow-md px-3 py-2 text-xs z-10 pointer-events-none min-w-max"
+          style={{
+            position: "absolute",
+            left: `${tooltipLeft}%`,
+            top: "8px",
+            transform: tooltipLeft > 50 ? "translateX(-100%)" : "translateX(0)",
+          }}
+        >
+          <div className="font-medium mb-1">{labels[hoverIdx]}</div>
+          {series.map((s) => (
+            <div key={s.label} className="flex items-center gap-1">
+              <span
+                className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+                style={{ backgroundColor: s.color }}
+              />
+              <span>{s.label}: {s.values[hoverIdx]}</span>
+            </div>
+          ))}
+        </div>
+      )}
       {/* Legend */}
       <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-600">
         {series.map((s) => (

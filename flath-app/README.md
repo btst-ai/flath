@@ -86,6 +86,32 @@ SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
 | `word_pack_items` | Many-to-many between packs and words. |
 | `duels` | Active and completed duel sessions. |
 
+### Part of speech (`part_of_speech`)
+
+Controlled vocabulary — enforced by a CHECK constraint in `words_dim` and mirrored as `POS_VALUES` in `lib/normalize.ts`. Valid values:
+
+| Value | Meaning |
+|---|---|
+| `Nom` | Noun |
+| `Verbe` | Verb |
+| `Adjectif` | Adjective |
+| `Adverbe` | Adverb |
+| `Pronom` | Pronoun |
+| `Preposition` | Preposition |
+| `Conjonction` | Conjunction |
+| `Interjection` | Interjection |
+| `Phrase` | Full sentence / expression |
+| `Autre` | Other / fallback (default) |
+
+Invalid or blank values are coerced to `Autre` on import. To audit current distribution in Supabase:
+
+```sql
+SELECT part_of_speech, COUNT(*) AS word_count
+FROM words_dim
+GROUP BY part_of_speech
+ORDER BY word_count DESC;
+```
+
 ### Row-Level Security
 
 RLS is enabled on all tables. Standard policy: `auth.uid() = user_id` (or `author_id`). The `duels` table uses an OR-policy so both players can read the shared row. Server actions that need cross-user writes use the service-role key and bypass RLS.

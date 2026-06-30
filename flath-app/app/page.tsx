@@ -80,6 +80,8 @@ export default function Home() {
     return `Day ${streak + 1} in reach${missedStr}`;
   };
 
+  const noActivity = (streakResult?.streak ?? 0) === 0 && !distinctWords7d && !wordsAdded7d;
+
   if (isAuthenticated === null) {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -116,6 +118,9 @@ export default function Home() {
         {isAuthenticated ? (
           <>
             {/* Progress metrics row */}
+            <p className="text-xs text-gray-400 mb-2 text-center">
+              {noActivity ? "Let's get started" : "This week"}
+            </p>
             <div className="grid grid-cols-3 gap-2 mb-6 max-w-sm mx-auto">
               <div className="bg-gray-50 rounded-xl px-2 py-3 flex flex-col items-center">
                 <span className="text-xs text-gray-500 mb-1 leading-tight text-center">Streak</span>
@@ -124,15 +129,15 @@ export default function Home() {
                 </span>
               </div>
               <div className="bg-gray-50 rounded-xl px-2 py-3 flex flex-col items-center">
-                <span className="text-xs text-gray-500 mb-1 leading-tight text-center">Words (7d)</span>
+                <span className="text-xs text-gray-500 mb-1 leading-tight text-center">Words</span>
                 <span className="text-2xl font-bold text-gray-900">
-                  {distinctWords7d ?? "—"}
+                  {distinctWords7d ?? (noActivity ? 0 : "—")}
                 </span>
               </div>
               <div className="bg-gray-50 rounded-xl px-2 py-3 flex flex-col items-center">
-                <span className="text-xs text-gray-500 mb-1 leading-tight text-center">Added (7d)</span>
+                <span className="text-xs text-gray-500 mb-1 leading-tight text-center">Added</span>
                 <span className="text-2xl font-bold text-gray-900">
-                  {wordsAdded7d ?? "—"}
+                  {wordsAdded7d ?? (noActivity ? 0 : "—")}
                 </span>
               </div>
             </div>

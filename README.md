@@ -24,7 +24,7 @@ flath/
 - **Practice** — adaptive sessions with two tracks: recognition (Greek → French) and production (French → Greek). Mixed mode uses a dynamic modality randomizer: baseline 70% Production bias, continuously adjusted by the delta between recent Production and Recognition failures over the last 14 days, so whichever track is currently weaker gets more cards. Exclude successful words (>75% in last 7 days) and/or words reviewed today. Per-state progress (Known / Not seen / Retry) plus an iteration counter for recycled passes. A 5-second retention intercept blocks input on missed cards so the correct answer registers. Hard-won wins (first-attempt correct on historically tough words) get a 🎉 marker on the session recap.
 - **Word Packs** — manual or smart (filter-based) packs. Scope a practice session to a pack.
 - **Duel** — real-time multiplayer vocabulary battle. Two players race through shared words. Desktop only.
-- **Progress** — dashboard streak metric (with one-day grace), two header metrics (distinct words last 7 days, longest streak), and a `/progress` page with a 30-day activity chart, struggling/forgetting word lists, production vs recognition weighted averages, theme breakdown, words-added stacked bar, and duel W/L/T summary.
+- **Progress** — dashboard streak metric (with one-day grace), "This week" header with distinct-words and words-added counters (zero-activity state shows "Let's get started"), and a `/progress` page with a 30-day activity line chart (per-day hover tooltip, `"D Mon"` date labels), struggling/forgetting word lists with inline 👍/👎 quick-review buttons (records a real `rec` attempt on tap), production vs recognition weighted averages, theme breakdown pie (top-6 + "Others"), words-added stacked bar (top-6 + "Others", per-day hover tooltip), and duel W/L/T summary.
 - **PWA** — installable on Android via Chrome "Add to Home Screen". Runs fullscreen with no browser chrome.
 
 ---
@@ -122,6 +122,27 @@ This prints the current PoS distribution and lists any rows that would be rewrit
 ---
 
 ## Changelog
+
+### Phase 3.6.2 — Progress UI polish (June 2026)
+
+**Charts**
+- 30-day line chart and words-added stacked bar: y-axis numeric label removed; x-axis dates reformatted to `"D Mon"` (e.g. `"15 Jun"`); per-day hover/tap tooltip shows date + per-series values. Touch support on mobile.
+- Theme pie and stacked bar: themes beyond the top 6 (by count) are collapsed into a grey "Others" entry, reducing clutter when many themes exist.
+- Day-key/display-label split in the stacked bar builder ensures the friendly date format does not break the internal `added_at` matching logic.
+
+**Word lists**
+- Struggling and forgetting word rows now have 👎 (left) and 👍 (right) inline review buttons. Tapping records a real recognition attempt (`mode: "rec"`) via `submitSessionAttempts`. Chosen thumb highlights; row stays visible. Sonner toast confirms success or reports error. Double-tap guard prevents duplicate recording.
+
+**Section labels**
+- `(30d)` removed from "Words seen by theme" and "Words added per day by theme" headings; replaced with a greyed italic "Last 30 days" subtitle.
+- "Duels" section gains an "All time" italic subtitle.
+
+**Dashboard counters**
+- "Words (7d)" and "Added (7d)" labels simplified to "Words" and "Added".
+- "This week" header added above the three-metric grid.
+- Zero-activity state (streak = 0, no words seen, no words added in 7 days) shows "Let's get started" header with `0` for all counters instead of `—`.
+
+---
 
 ### Phase 3.6.1 — Progress tracker bugfixes (June 2026)
 
