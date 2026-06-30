@@ -6,11 +6,45 @@ Built with Next.js 16 (App Router), Supabase, and Tailwind CSS. Deployed on Verc
 
 ---
 
+## Changelog
+
+### Phase 3.7 — Inline action feedback (2026-06-30)
+
+- **Progress page header**: replaced `← Back` text link with the standard white-bordered Dashboard button consistent with vault and packs pages.
+- **No more success toasts**: removed all top-right success popups from high-frequency actions. Replaced with an inline green-tick button animation (~800ms). Affected actions: add word, mark-as-mistake (vault row + in-session drawer), vault remove/archive (row and batch), and all modal save buttons (edit word, batch edit, edit pack, import resolve/rename/merge). Error toasts remain.
+- New `TickButton` component (`components/TickButton.tsx`): reusable `idle → pending → done → idle` button wrapper. Modal save buttons show the tick then close.
+- Batch delete goes silent — row disappearance is the confirmation.
+
+### Phase 3.6.2 — Progress page polish (2026-06-30)
+
+- Chart x-axis dates formatted as `"15 Jun"` (was bare `MM-DD`); y-axis numeric label removed.
+- Per-day hover tooltips on line chart and stacked bar chart.
+- Struggling/forgetting word lists now have inline 👎/👍 review buttons recording real recognition attempts without entering a practice session.
+- Theme pie chart and words-added stacked bar: themes beyond top 6 grouped into "Others".
+- Section headings use greyed italic subtitles instead of inline `(30d)` labels.
+- Home dashboard counters: `(7d)` suffix removed; "This week" header added above the grid. Zero-activity state shows "Let's get started".
+- Bugfix: excluded a known June 2026 backfill date from words-added queries to prevent inflated counts.
+
+### Phase 3.6.1 — Progress tracker bugfixes (prior)
+
+- Fixed `avg_success_rate_prod/rec` display: dropped erroneous `* 100` (rates stored as 0-100, not 0-1).
+- Fixed `buildStrugglingPool` / `buildForgettingPool` weight expressions to prevent negative weights on the 0-100 scale.
+- Fixed PostgREST 1000-row cap on streak and attempt queries via RPC returning distinct dates.
+- Fixed stacked bar chart label mismatch (`MM-DD` vs `MM/DD`).
+
+### Phase 3.6 — Progress tracker (prior)
+
+- `/progress` page with 30-day activity line chart, words-added stacked bar, struggling/forgetting word lists, theme pie, duel summary, and streak label.
+- Vitest suite for `lib/progressStats.ts`.
+
+---
+
 ## Features
 
 - **Vault** — browse, add, edit, and archive your personal Greek word library. Import words via CSV (desktop only).
 - **Practice** — spaced-repetition sessions with two tracks: recognition (Greek → French) and production (French → Greek). Mixed mode uses a dynamic modality randomizer: 70% Production baseline, adjusted each session by the delta between recent Production and Recognition failures (14-day window) so the weaker track always gets more cards.
 - **Word Packs** — organise words into manual or smart (filter-based) packs. Start a practice session scoped to a pack.
+- **Progress** — `/progress` page with 30-day activity charts, streak tracking, struggling/forgetting word lists with inline review buttons, theme breakdown pie, and duel summary.
 - **Duel** — real-time multiplayer vocabulary battle. Two players race through shared words. Desktop only.
 - **PWA** — installable from Chrome on Android via "Add to Home Screen". Runs fullscreen, no browser chrome.
 
@@ -150,6 +184,7 @@ flath-app/
 │   ├── duel/             # Duel lobby + game UI
 │   ├── packs/            # Word Packs page
 │   ├── practice/         # Practice session page
+│   ├── progress/         # Progress tracker page
 │   ├── vault/            # Vocabulary vault page
 │   ├── layout.tsx        # Root layout (metadata, viewport, PWA tags)
 │   ├── manifest.webmanifest

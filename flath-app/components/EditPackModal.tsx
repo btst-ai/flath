@@ -3,6 +3,7 @@ import { normalizeForSearch } from "@/lib/normalize";
 import { supabase } from "@/lib/supabase";
 import { X, Search, Plus, Trash2, Star } from "lucide-react";
 import { toast } from "sonner";
+import { TickButton } from "@/components/TickButton";
 
 interface EditPackModalProps {
   isOpen: boolean;
@@ -15,7 +16,6 @@ interface EditPackModalProps {
 export function EditPackModal({ isOpen, onClose, pack, onSuccess, userId }: EditPackModalProps) {
   const [name, setName] = useState("");
   const [isFav, setIsFav] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
 
   // Static pack specific
   const [packWords, setPackWords] = useState<any[]>([]);
@@ -85,14 +85,12 @@ export function EditPackModal({ isOpen, onClose, pack, onSuccess, userId }: Edit
     setPackWords(packWords.filter(w => w.word_id !== wordId));
   };
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
     if (!name.trim()) {
       toast.error("Name cannot be empty");
-      return;
+      return false;
     }
 
-    setIsSaving(true);
-    
     // 1. Update Pack details
     const { error: packError } = await supabase
       .from("word_packs")
@@ -101,15 +99,14 @@ export function EditPackModal({ isOpen, onClose, pack, onSuccess, userId }: Edit
 
     if (packError) {
       toast.error("Failed to update pack");
-      setIsSaving(false);
-      return;
+      return false;
     }
 
     // 2. If static, sync word_pack_items
     if (!pack.is_smart && !pack.is_auto) {
       // Delete old items
       await supabase.from("word_pack_items").delete().eq("pack_id", pack.id);
-      
+
       // Insert new items
       if (packWords.length > 0) {
         const newItems = packWords.map(w => ({
@@ -120,26 +117,19 @@ export function EditPackModal({ isOpen, onClose, pack, onSuccess, userId }: Edit
       }
     }
 
-    setIsSaving(false);
-    toast.success("Pack updated!");
-    onSuccess();
-    onClose();
+    return true;
   };
 
-  const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this pack?")) return;
-    
-    setIsSaving(true);
+  const handleDelete = async (): Promise<boolean> => {
+    if (!confirm("Are you sure you want to delete this pack?")) return false;
+
     const { error } = await supabase.from("word_packs").delete().eq("id", pack.id);
-    setIsSaving(false);
 
     if (error) {
       toast.error("Failed to delete pack");
-    } else {
-      toast.success("Pack deleted");
-      onSuccess();
-      onClose();
+      return false;
     }
+    return true;
   };
 
   if (!isOpen || !pack) return null;
@@ -258,13 +248,13 @@ export function EditPackModal({ isOpen, onClose, pack, onSuccess, userId }: Edit
         </div>
 
         <div className="p-6 border-t border-gray-100 bg-gray-50 shrink-0 flex justify-between items-center">
-          <button
-            onClick={handleDelete}
-            disabled={isSaving}
-            className="px-4 py-2 text-red-600 font-semibold hover:bg-red-50 rounded-lg transition"
+          <TickButton
+            onAction={handleDelete}
+            onDone={() => { onSuccess(); onClose(); }}
+            className="px-4 py-2 text-red-600 font-semibold hover:bg-red-50 rounded-lg transition flex items-center justify-center"
           >
             Delete Pack
-          </button>
+          </TickButton>
           <div className="flex gap-3">
             <button
               onClick={onClose}
@@ -272,15 +262,14 @@ export function EditPackModal({ isOpen, onClose, pack, onSuccess, userId }: Edit
             >
               Cancel
             </button>
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="px-5 py-2.5 text-white font-semibold bg-blue-600 hover:bg-blue-700 rounded-lg transition flex items-center gap-2 shadow-sm"
+            <TickButton
+              onAction={handleSave}
+              onDone={() => { onSuccess(); onClose(); }}
+              className="px-5 py-2.5 text-white font-semibold bg-blue-600 hover:bg-blue-700 rounded-lg transition flex items-center justify-center gap-2 shadow-sm"
+              spinnerClassName="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"
             >
-              {isSaving ? (
-                <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving...</>
-              ) : "Save Changes"}
-            </button>
+              Save Changes
+            </TickButton>
           </div>
         </div>
       </div>

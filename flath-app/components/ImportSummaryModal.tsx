@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { X, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
+import { TickButton } from "@/components/TickButton";
 import { supabase } from "@/lib/supabase";
 import { POS_VALUES, coercePos } from "@/lib/normalize";
 import { renameOrMergeTheme } from "@/app/actions/words";
@@ -61,7 +62,6 @@ export function ImportSummaryModal({ isOpen, onClose, words, onRefresh }: Import
   const [renameTo, setRenameTo] = useState("");
   const [mergeFrom, setMergeFrom] = useState("");
   const [mergeTo, setMergeTo] = useState("");
-  const [isThemeActing, setIsThemeActing] = useState(false);
 
   // Re-sync local state when words prop changes (e.g. on open)
   const syncedWords = localWords.length === 0 && words.length > 0 ? words : localWords;
@@ -84,9 +84,9 @@ export function ImportSummaryModal({ isOpen, onClose, words, onRefresh }: Import
     setEditState(prev => ({ ...prev, [word.id]: { ...word } }));
   };
 
-  const saveEdit = async (wordId: string) => {
+  const saveEdit = async (wordId: string): Promise<boolean> => {
     const updates = editState[wordId];
-    if (!updates) return;
+    if (!updates) return false;
 
     const { error } = await supabase
       .from("words_dim")
@@ -100,7 +100,7 @@ export function ImportSummaryModal({ isOpen, onClose, words, onRefresh }: Import
 
     if (error) {
       toast.error(`Save failed: ${error.message}`);
-      return;
+      return false;
     }
 
     setLocalWords(prev => prev.map(w =>
@@ -108,45 +108,40 @@ export function ImportSummaryModal({ isOpen, onClose, words, onRefresh }: Import
         ? { ...w, ...updates, part_of_speech: coercePos(updates.part_of_speech), theme: updates.theme?.trim() || "General" }
         : w
     ));
-    setEditingWordId(null);
-    toast.success("Word updated.");
     onRefresh();
+    return true;
   };
 
-  const handleRenameTheme = async () => {
-    if (!renameFrom || !renameTo.trim()) return;
+  const handleRenameTheme = async (): Promise<boolean> => {
+    if (!renameFrom || !renameTo.trim()) return false;
     const ids = syncedWords.filter(w => (w.theme || "No Theme") === renameFrom).map(w => w.id);
-    if (ids.length === 0) return;
-    setIsThemeActing(true);
+    if (ids.length === 0) return false;
     const result = await renameOrMergeTheme(ids, renameFrom, renameTo.trim());
-    setIsThemeActing(false);
     if ("error" in result) {
       toast.error(`Rename failed: ${result.error}`);
-      return;
+      return false;
     }
     setLocalWords(prev => prev.map(w => w.theme === renameFrom ? { ...w, theme: renameTo.trim() } : w));
-    toast.success(`Renamed "${renameFrom}" to "${renameTo.trim()}" (${result.updated} words).`);
     setRenameFrom("");
     setRenameTo("");
     onRefresh();
+    return true;
   };
 
-  const handleMergeTheme = async () => {
-    if (!mergeFrom || !mergeTo || mergeFrom === mergeTo) return;
+  const handleMergeTheme = async (): Promise<boolean> => {
+    if (!mergeFrom || !mergeTo || mergeFrom === mergeTo) return false;
     const ids = syncedWords.filter(w => (w.theme || "No Theme") === mergeFrom).map(w => w.id);
-    if (ids.length === 0) return;
-    setIsThemeActing(true);
+    if (ids.length === 0) return false;
     const result = await renameOrMergeTheme(ids, mergeFrom, mergeTo);
-    setIsThemeActing(false);
     if ("error" in result) {
       toast.error(`Merge failed: ${result.error}`);
-      return;
+      return false;
     }
     setLocalWords(prev => prev.map(w => w.theme === mergeFrom ? { ...w, theme: mergeTo } : w));
-    toast.success(`Merged "${mergeFrom}" into "${mergeTo}" (${result.updated} words).`);
     setMergeFrom("");
     setMergeTo("");
     onRefresh();
+    return true;
   };
 
   const unmatched = syncedWords.filter(w => w.frequency_rank >= 8000 && w.greek_text);
@@ -185,13 +180,13 @@ export function ImportSummaryModal({ isOpen, onClose, words, onRefresh }: Import
                   placeholder="New name"
                   className="flex-1 p-2 text-sm border border-gray-300 rounded-lg"
                 />
-                <button
-                  onClick={handleRenameTheme}
-                  disabled={isThemeActing || !renameFrom || !renameTo.trim()}
-                  className="px-3 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+                <TickButton
+                  onAction={handleRenameTheme}
+                  disabled={!renameFrom || !renameTo.trim()}
+                  className="px-3 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 flex items-center justify-center"
                 >
                   Apply
-                </button>
+                </TickButton>
               </div>
             </div>
             <div>
@@ -214,13 +209,13 @@ export function ImportSummaryModal({ isOpen, onClose, words, onRefresh }: Import
                   <option value="">Target...</option>
                   {themes.filter(t => t !== mergeFrom).map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
-                <button
-                  onClick={handleMergeTheme}
-                  disabled={isThemeActing || !mergeFrom || !mergeTo || mergeFrom === mergeTo}
-                  className="px-3 py-2 text-sm font-semibold bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition disabled:opacity-50"
+                <TickButton
+                  onAction={handleMergeTheme}
+                  disabled={!mergeFrom || !mergeTo || mergeFrom === mergeTo}
+                  className="px-3 py-2 text-sm font-semibold bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition disabled:opacity-50 flex items-center justify-center"
                 >
                   Merge
-                </button>
+                </TickButton>
               </div>
             </div>
           </div>
@@ -349,12 +344,13 @@ export function ImportSummaryModal({ isOpen, onClose, words, onRefresh }: Import
                                       <td className="py-1.5 text-right whitespace-nowrap">
                                         {isEditing ? (
                                           <div className="flex gap-1 justify-end">
-                                            <button
-                                              onClick={() => saveEdit(w.id)}
-                                              className="px-2 py-1 bg-blue-600 text-white rounded text-xs font-semibold hover:bg-blue-700"
+                                            <TickButton
+                                              onAction={() => saveEdit(w.id)}
+                                              onDone={() => setEditingWordId(null)}
+                                              className="px-2 py-1 bg-blue-600 text-white rounded text-xs font-semibold hover:bg-blue-700 flex items-center justify-center"
                                             >
                                               Save
-                                            </button>
+                                            </TickButton>
                                             <button
                                               onClick={() => setEditingWordId(null)}
                                               className="px-2 py-1 bg-gray-200 text-gray-700 rounded text-xs hover:bg-gray-300"

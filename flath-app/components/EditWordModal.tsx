@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Lock } from "lucide-react";
 import { toast } from "sonner";
+import { TickButton } from "@/components/TickButton";
 import { supabase } from "@/lib/supabase";
 import { POS_VALUES, PosValue, coercePos, normalizeForSearch } from "@/lib/normalize";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
@@ -34,7 +35,6 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
   const [frenchText, setFrenchText] = useState("");
   const [theme, setTheme] = useState("");
   const [pos, setPos] = useState<PosValue>("Nom");
-  const [isSaving, setIsSaving] = useState(false);
   const [difficulty, setDifficulty] = useState<string>("");
 
   const [availableThemes, setAvailableThemes] = useState<string[]>([]);
@@ -77,9 +77,7 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
   // Global system words have created_by_user_id = null — only admins can edit them.
   const canEdit = isAdmin || (currentUserId !== null && word.created_by_user_id === currentUserId);
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    
+  const handleSave = async (): Promise<boolean> => {
     const { error, data } = await supabase
       .from("words_dim")
       .update({
@@ -92,17 +90,14 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
       .eq("id", word.id)
       .select();
 
-    setIsSaving(false);
-
     if (error) {
       toast.error(`Failed to save: ${error.message}`);
+      return false;
     } else if (!data || data.length === 0) {
       toast.error(`Failed to save. You may not have permission to edit this word.`);
-    } else {
-      toast.success("Word updated successfully!");
-      onSuccess();
-      onClose();
+      return false;
     }
+    return true;
   };
 
   return (
@@ -250,20 +245,14 @@ export function EditWordModal({ isOpen, onClose, word, onSuccess }: EditWordModa
               Cancel
             </button>
             {canEdit ? (
-              <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="px-5 py-2.5 text-white font-semibold bg-blue-600 hover:bg-blue-700 rounded-lg transition flex items-center gap-2"
+              <TickButton
+                onAction={handleSave}
+                onDone={() => { onSuccess(); onClose(); }}
+                className="px-5 py-2.5 text-white font-semibold bg-blue-600 hover:bg-blue-700 rounded-lg transition flex items-center justify-center gap-2"
+                spinnerClassName="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"
               >
-                {isSaving ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  "Save Changes"
-                )}
-              </button>
+                Save Changes
+              </TickButton>
             ) : (
               <span className="flex items-center gap-1.5 text-sm text-gray-400">
                 <Lock className="w-4 h-4" /> Only the owner or an admin can edit this word

@@ -1,8 +1,5 @@
-# in-session-vault Specification
+## MODIFIED Requirements
 
-## Purpose
-Provides a minimal vault drawer available during an active practice session so the user can look up, search, view, and edit words on the fly without disrupting the session queue, timer, or progress.
-## Requirements
 ### Requirement: In-session vault drawer
 The system SHALL provide a minimal vault drawer accessible from within an active practice session that lets the user search, view, and edit words, and that preserves the active session queue when opened or closed. The mark-as-mistake button in the drawer SHALL show an inline green tick on success; no top-right success toast SHALL appear.
 
@@ -25,4 +22,3 @@ The system SHALL provide a minimal vault drawer accessible from within an active
 #### Scenario: Close drawer returns to the card
 - **WHEN** the user closes the drawer
 - **THEN** the same practice card and session state are restored exactly as before
-

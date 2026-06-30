@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { useAddWord } from "@/hooks/useAddWord";
 import { ConflictResolutionModal } from "@/components/ConflictResolutionModal";
+import { TickButton } from "@/components/TickButton";
 import { POS_VALUES, normalizeForSearch } from "@/lib/normalize";
 import { markWordAsMistake } from "@/app/actions/session";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
@@ -26,7 +27,7 @@ export function AddWordModal({ isOpen, onClose }: AddWordModalProps) {
   const themeInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const { addWords, isAdding, conflictState } = useAddWord();
+  const { addWords, conflictState } = useAddWord();
 
   useFocusTrap(panelRef, isOpen);
 
@@ -49,8 +50,8 @@ export function AddWordModal({ isOpen, onClose }: AddWordModalProps) {
     onClose();
   };
 
-  const handleSave = async () => {
-    if (!greekText.trim() || !frenchText.trim()) return;
+  const handleSave = async (): Promise<boolean> => {
+    if (!greekText.trim() || !frenchText.trim()) return false;
     const result = await addWords([{
       greek_text: greekText.trim(),
       french_text: frenchText.trim(),
@@ -69,7 +70,7 @@ export function AddWordModal({ isOpen, onClose }: AddWordModalProps) {
         }
       }
     }
-    handleClose();
+    return true;
   };
 
   if (!isOpen) return null;
@@ -201,20 +202,15 @@ export function AddWordModal({ isOpen, onClose }: AddWordModalProps) {
               >
                 Cancel
               </button>
-              <button
-                onClick={handleSave}
-                disabled={isAdding || !greekText.trim() || !frenchText.trim()}
-                className="px-5 py-2.5 text-white font-semibold bg-blue-600 hover:bg-blue-700 rounded-lg transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              <TickButton
+                onAction={handleSave}
+                onDone={handleClose}
+                disabled={!greekText.trim() || !frenchText.trim()}
+                className="px-5 py-2.5 text-white font-semibold bg-blue-600 hover:bg-blue-700 rounded-lg transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                spinnerClassName="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"
               >
-                {isAdding ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Adding...
-                  </>
-                ) : (
-                  "Add Word"
-                )}
-              </button>
+                Add Word
+              </TickButton>
             </div>
           </div>
         </div>

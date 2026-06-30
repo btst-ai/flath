@@ -13,6 +13,7 @@ import { EditWordModal, getDifficultyFromRank } from "@/components/EditWordModal
 import { ImportSummaryModal, ImportedWord } from "@/components/ImportSummaryModal";
 import { BatchEditModal } from "@/components/BatchEditModal";
 import { PracticeSelectionModal } from "@/components/PracticeSelectionModal";
+import { TickButton } from "@/components/TickButton";
 import { useSurface, isMobileSurface } from "@/lib/surface";
 import { normalizeForSearch, coercePos } from "@/lib/normalize";
 import { loadFrequencyMap, extractLookupToken } from "@/lib/freqLookup";
@@ -84,7 +85,6 @@ export default function VaultPage() {
   const [newThemeName, setNewThemeName] = useState("");
 
   const [editingWord, setEditingWord] = useState<any | null>(null);
-  const [mistakeInFlight, setMistakeInFlight] = useState<string | null>(null);
   const [isBatchEditing, setIsBatchEditing] = useState(false);
   const [showPracticeModal, setShowPracticeModal] = useState(false);
   
@@ -345,33 +345,31 @@ export default function VaultPage() {
     }
   };
 
-  const handleMarkAsMistake = async (word_id: string) => {
-    if (!userId) return;
-    setMistakeInFlight(word_id);
+  const handleMarkAsMistake = async (word_id: string): Promise<boolean> => {
+    if (!userId) return false;
     const result = await markWordAsMistake(userId, word_id);
-    setMistakeInFlight(null);
     if ("error" in result) {
       toast.error(`Failed to mark as mistake: ${result.error}`);
-    } else {
-      toast.success("Marked as mistake");
-      // Targeted single-row refetch: avoids the unbounded all-words query that
-      // fetchVocab() issues. The mistake tag updates aggregates (success rate,
-      // last_mistake_at) that are displayed in the row, so we merge the fresh
-      // server row back into myLibrary state. Fall back to fetchVocab() only if
-      // the targeted query itself fails.
-      const { data: fresh, error: freshErr } = await supabase
-        .from("user_word_settings")
-        .select("*, words_dim (*)")
-        .eq("user_id", userId)
-        .eq("word_id", word_id)
-        .single();
-      if (freshErr || !fresh) {
-        console.warn("[vault] targeted row refetch failed, falling back to full fetchVocab", freshErr);
-        fetchVocab();
-      } else {
-        setMyLibrary((prev) => prev.map((v) => v.word_id === word_id ? fresh : v));
-      }
+      return false;
     }
+    // Targeted single-row refetch: avoids the unbounded all-words query that
+    // fetchVocab() issues. The mistake tag updates aggregates (success rate,
+    // last_mistake_at) that are displayed in the row, so we merge the fresh
+    // server row back into myLibrary state. Fall back to fetchVocab() only if
+    // the targeted query itself fails.
+    const { data: fresh, error: freshErr } = await supabase
+      .from("user_word_settings")
+      .select("*, words_dim (*)")
+      .eq("user_id", userId)
+      .eq("word_id", word_id)
+      .single();
+    if (freshErr || !fresh) {
+      console.warn("[vault] targeted row refetch failed, falling back to full fetchVocab", freshErr);
+      fetchVocab();
+    } else {
+      setMyLibrary((prev) => prev.map((v) => v.word_id === word_id ? fresh : v));
+    }
+    return true;
   };
 
   const addToMyLibrary = async (word: any) => {
@@ -385,67 +383,61 @@ export default function VaultPage() {
     fetchVocab();
   };
 
-  const [removeOtherInFlight, setRemoveOtherInFlight] = useState<string | null>(null);
 
   // For "Added by others" words not yet in the user's library:
   // "remove" = add-then-archive (design decision #12) so the word lands in the
   // user's removed/archived set and no longer appears under "Added by others".
-  const removeFromOthers = async (word: any) => {
-    if (!userId) return;
-    setRemoveOtherInFlight(word.id);
-    try {
-      // Step 1: add to library (upsert via addWords, ignoreDuplicates)
-      const wordInput: WordInput = {
-        greek_text: word.greek_text,
-        french_text: word.french_text,
-        part_of_speech: word.part_of_speech,
-        theme: word.theme,
-      };
-      await addWords([wordInput]);
+  const removeFromOthers = async (word: any): Promise<boolean> => {
+    if (!userId) return false;
+    // Step 1: add to library (upsert via addWords, ignoreDuplicates)
+    const wordInput: WordInput = {
+      greek_text: word.greek_text,
+      french_text: word.french_text,
+      part_of_speech: word.part_of_speech,
+      theme: word.theme,
+    };
+    await addWords([wordInput]);
 
-      // Step 2: find the newly created user_word_settings row and archive it
-      const { data: settingsData, error: settingsErr } = await supabase
-        .from("user_word_settings")
-        .select("word_id")
-        .eq("user_id", userId)
-        .eq("word_id", word.id)
-        .maybeSingle();
+    // Step 2: find the newly created user_word_settings row and archive it
+    const { data: settingsData, error: settingsErr } = await supabase
+      .from("user_word_settings")
+      .select("word_id")
+      .eq("user_id", userId)
+      .eq("word_id", word.id)
+      .maybeSingle();
 
-      if (settingsErr || !settingsData) {
-        toast.error("Word added but could not archive — please archive manually.");
-        fetchVocab();
-        return;
-      }
-
-      const { data: archiveData, error: archiveErr } = await supabase
-        .from("user_word_settings")
-        .update({ is_archived: true })
-        .eq("user_id", userId)
-        .eq("word_id", word.id)
-        .select();
-
-      if (archiveErr || !archiveData || archiveData.length === 0) {
-        toast.error(archiveErr ? `Failed to archive: ${archiveErr.message}` : "Could not archive word — permission denied");
-        return;
-      }
-      toast.success("Word removed from your view.");
+    if (settingsErr || !settingsData) {
+      toast.error("Word added but could not archive — please archive manually.");
       fetchVocab();
-    } finally {
-      setRemoveOtherInFlight(null);
+      return false;
     }
+
+    const { data: archiveData, error: archiveErr } = await supabase
+      .from("user_word_settings")
+      .update({ is_archived: true })
+      .eq("user_id", userId)
+      .eq("word_id", word.id)
+      .select();
+
+    if (archiveErr || !archiveData || archiveData.length === 0) {
+      toast.error(archiveErr ? `Failed to archive: ${archiveErr.message}` : "Could not archive word — permission denied");
+      return false;
+    }
+    fetchVocab();
+    return true;
   };
 
-  const handleBatchArchive = async () => {
-    if (!userId || selectedWordIds.size === 0) return;
+  const handleBatchArchive = async (): Promise<boolean> => {
+    if (!userId || selectedWordIds.size === 0) return false;
     const ids = Array.from(selectedWordIds);
     const result = await batchArchiveWords(userId, ids);
     if ("error" in result) {
       toast.error(`Archive failed: ${result.error}`);
-    } else {
-      toast.success(`${ids.length} word(s) archived.`);
-      setSelectedWordIds(new Set());
-      fetchVocab();
+      return false;
     }
+    setSelectedWordIds(new Set());
+    fetchVocab();
+    return true;
   };
 
   const handleBatchDelete = async () => {
@@ -456,8 +448,6 @@ export default function VaultPage() {
     if ("error" in result) {
       toast.error(`Delete failed: ${result.error}`);
     } else {
-      if (result.ownedDeleted > 0) toast.success(`${result.ownedDeleted} word(s) permanently deleted.`);
-      if (result.removedFromLibrary > 0) toast.info(`${result.removedFromLibrary} word(s) removed from your library.`);
       setSelectedWordIds(new Set());
       fetchVocab();
     }
@@ -1132,12 +1122,12 @@ export default function VaultPage() {
                   Batch Edit ({selectedWordIds.size})
                 </button>
                 {/* desktop-only — see flath-app/CLAUDE.md */}
-                <button
-                  onClick={handleBatchArchive}
-                  className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-md text-sm font-medium hover:bg-orange-200 transition shadow"
+                <TickButton
+                  onAction={handleBatchArchive}
+                  className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-md text-sm font-medium hover:bg-orange-200 transition shadow flex items-center justify-center"
                 >
                   Archive ({selectedWordIds.size})
-                </button>
+                </TickButton>
                 {/* desktop-only — see flath-app/CLAUDE.md */}
                 <button
                   onClick={() => setShowBatchDeleteConfirm(true)}
@@ -1315,11 +1305,11 @@ export default function VaultPage() {
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
-                            <button
-                              onClick={() => handleMarkAsMistake(setting.word_id)}
-                              disabled={isArchived || mistakeInFlight === setting.word_id}
+                            <TickButton
+                              onAction={() => handleMarkAsMistake(setting.word_id)}
+                              disabled={isArchived}
                               className={`p-1.5 rounded-full transition-colors ${
-                                isArchived || mistakeInFlight === setting.word_id
+                                isArchived
                                   ? "cursor-not-allowed text-gray-300"
                                   : "text-gray-400 hover:text-orange-500 hover:bg-orange-50"
                               }`}
@@ -1327,7 +1317,7 @@ export default function VaultPage() {
                               aria-label="Mark as mistake"
                             >
                               <AlertTriangle className="w-4 h-4" />
-                            </button>
+                            </TickButton>
                             <button
                               onClick={() => archiveWord(setting.word_id, isArchived)}
                               className={`p-1.5 rounded-full transition-colors ${
@@ -1394,21 +1384,19 @@ export default function VaultPage() {
                           <div className="flex justify-center items-center gap-1">
                             <button
                               onClick={() => addToMyLibrary(vocab)}
-                              disabled={removeOtherInFlight === vocab.id}
                               className="px-2.5 py-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition text-xs font-medium flex items-center gap-1 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Move to My Library"
                             >
                               <Plus className="w-3.5 h-3.5" /> My Library
                             </button>
-                            <button
-                              onClick={() => removeFromOthers(vocab)}
-                              disabled={removeOtherInFlight === vocab.id}
-                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            <TickButton
+                              onAction={() => removeFromOthers(vocab)}
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
                               title="Remove (archive)"
                               aria-label="Remove from view"
                             >
                               <Trash2 className="w-4 h-4" />
-                            </button>
+                            </TickButton>
                           </div>
                         </td>
                       </tr>

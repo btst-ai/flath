@@ -180,10 +180,6 @@ export function useAddWord() {
         }
       }
       
-      if (successCount > 0 && words.length === 1) {
-        toast.success(`Successfully added ${successCount} word(s) to your library.`);
-      }
-
       return { stats: addedWordsStats };
     } finally {
       setIsAdding(false);

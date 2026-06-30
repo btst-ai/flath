@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { toast } from "sonner";
+import { TickButton } from "@/components/TickButton";
 import { supabase } from "@/lib/supabase";
 import { getRankFromDifficulty } from "./EditWordModal";
 import { POS_VALUES, coercePos } from "@/lib/normalize";
@@ -18,7 +19,6 @@ export function BatchEditModal({ isOpen, onClose, selectedWordIds, onSuccess }: 
   const [theme, setTheme] = useState("");
   const [difficulty, setDifficulty] = useState("");
   const [pos, setPos] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
   
   const [availableThemes, setAvailableThemes] = useState<string[]>([]);
   const [showThemeSuggestions, setShowThemeSuggestions] = useState(false);
@@ -39,13 +39,12 @@ export function BatchEditModal({ isOpen, onClose, selectedWordIds, onSuccess }: 
 
   if (!isOpen || selectedWordIds.length === 0) return null;
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
     if (!theme && !difficulty && !pos) {
       toast.error("Please enter a new theme, difficulty, or part of speech to update.");
-      return;
+      return false;
     }
 
-    setIsSaving(true);
     const updates: any = {};
     if (theme) updates.theme = theme.trim();
     if (difficulty) updates.frequency_rank = getRankFromDifficulty(difficulty);
@@ -57,20 +56,14 @@ export function BatchEditModal({ isOpen, onClose, selectedWordIds, onSuccess }: 
       .in("id", selectedWordIds)
       .select();
 
-    setIsSaving(false);
-
     if (error) {
       toast.error(`Failed to update words: ${error.message}`);
+      return false;
     } else if (!data || data.length === 0) {
       toast.error(`Update failed. You may not have permission to edit these words.`);
-    } else {
-      toast.success(`${data.length} words updated successfully!`);
-      if (data.length < selectedWordIds.length) {
-        toast.info(`${selectedWordIds.length - data.length} words were not updated due to permissions.`);
-      }
-      onSuccess();
-      onClose();
+      return false;
     }
+    return true;
   };
 
   return (
@@ -176,20 +169,14 @@ export function BatchEditModal({ isOpen, onClose, selectedWordIds, onSuccess }: 
             >
               Cancel
             </button>
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="px-5 py-2.5 text-white font-semibold bg-blue-600 hover:bg-blue-700 rounded-lg transition flex items-center gap-2"
+            <TickButton
+              onAction={handleSave}
+              onDone={() => { onSuccess(); onClose(); }}
+              className="px-5 py-2.5 text-white font-semibold bg-blue-600 hover:bg-blue-700 rounded-lg transition flex items-center justify-center gap-2"
+              spinnerClassName="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"
             >
-              {isSaving ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                "Update Words"
-              )}
-            </button>
+              Update Words
+            </TickButton>
           </div>
         </div>
       </div>

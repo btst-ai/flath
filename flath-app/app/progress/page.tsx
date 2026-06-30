@@ -328,10 +328,11 @@ export default function ProgressPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">Progress</h1>
           <button
+            type="button"
             onClick={() => router.push("/")}
-            className="text-sm text-gray-500 hover:text-gray-800 underline"
+            className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition"
           >
-            ← Back
+            Dashboard
           </button>
         </div>
 

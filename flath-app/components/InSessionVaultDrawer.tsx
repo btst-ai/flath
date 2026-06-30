@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { markWordAsMistake } from "@/app/actions/session";
 import { normalizeForSearch } from "@/lib/normalize";
 import { EditWordModal } from "@/components/EditWordModal";
+import { TickButton } from "@/components/TickButton";
 
 interface InSessionVaultDrawerProps {
   isOpen: boolean;
@@ -31,7 +32,6 @@ export function InSessionVaultDrawer({ isOpen, onClose, userId }: InSessionVault
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [editingWord, setEditingWord] = useState<any | null>(null);
-  const [mistakeInFlight, setMistakeInFlight] = useState<string | null>(null);
 
   const fetchLibrary = useCallback(async () => {
     if (!userId) return;
@@ -69,20 +69,18 @@ export function InSessionVaultDrawer({ isOpen, onClose, userId }: InSessionVault
     }
   }, [isOpen, fetchLibrary]);
 
-  const handleMarkMistake = async (row: LibraryRow) => {
-    if (!userId) return;
-    setMistakeInFlight(row.word_id);
+  const handleMarkMistake = async (row: LibraryRow): Promise<boolean> => {
+    if (!userId) return false;
     const result = await markWordAsMistake(userId, row.word_id, "rec");
-    setMistakeInFlight(null);
     if ("error" in result) {
       toast.error(`Could not mark as mistake: ${result.error}`);
-    } else {
-      toast.success(`"${row.words_dim.greek_text}" marked as a mistake`);
-      // No refetch needed: markWordAsMistake does not change is_archived, and
-      // the drawer rows display only greek_text/french_text/theme — none of which
-      // are updated by a mistake tag. EditWordModal's onSuccess still calls
-      // fetchLibrary() because edits can change displayed fields.
+      return false;
     }
+    // No refetch needed: markWordAsMistake does not change is_archived, and
+    // the drawer rows display only greek_text/french_text/theme — none of which
+    // are updated by a mistake tag. EditWordModal's onSuccess still calls
+    // fetchLibrary() because edits can change displayed fields.
+    return true;
   };
 
   // Filter list client-side
@@ -202,19 +200,15 @@ export function InSessionVaultDrawer({ isOpen, onClose, userId }: InSessionVault
                     </button>
 
                     {/* Add a Mistake */}
-                    <button
-                      onClick={() => handleMarkMistake(row)}
-                      disabled={mistakeInFlight === row.word_id}
+                    <TickButton
+                      onAction={() => handleMarkMistake(row)}
                       className="p-2 text-gray-400 dark:text-gray-500 hover:text-orange-500 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/30 rounded-full transition-colors disabled:opacity-40"
+                      spinnerClassName="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin"
                       title="Add a Mistake"
                       aria-label={`Mark ${row.words_dim.greek_text} as a mistake`}
                     >
-                      {mistakeInFlight === row.word_id ? (
-                        <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <AlertTriangle className="w-4 h-4" />
-                      )}
-                    </button>
+                      <AlertTriangle className="w-4 h-4" />
+                    </TickButton>
                   </div>
                 </li>
               ))}

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Folder, Play, Plus, X, Star, Settings, Edit, Trash2, ArrowUpDown, ChevronUp, ChevronDown, Pencil, Check } from "lucide-react";
 import { getDifficultyFromRank } from "@/components/EditWordModal";
 import { EditPackModal } from "@/components/EditPackModal";
+import { TickButton } from "@/components/TickButton";
 
 // Helper for pack color
 const getPackColorStyle = (packId: string, avgHeat: number) => {
@@ -233,7 +234,7 @@ export default function PacksPage() {
     setIsPreviewing(true);
   };
 
-  const handleCreateSmartPack = async () => {
+  const handleCreateSmartPack = async (): Promise<boolean> => {
     const excludedIds = previewWords
       .filter(w => !selectedPreviewIds.has(w.word_id))
       .map(w => w.word_id);
@@ -256,13 +257,10 @@ export default function PacksPage() {
 
     if (error) {
       toast.error("Failed to create pack: " + error.message);
-    } else {
-      toast.success("Smart pack created!");
-      setIsCreatingSmart(false);
-      setIsPreviewing(false);
-      setName("");
-      fetchPacks();
+      return false;
     }
+    fetchPacks();
+    return true;
   };
 
   const togglePreviewSelection = (id: string) => {
@@ -282,21 +280,16 @@ export default function PacksPage() {
     setRenameValue("");
   };
 
-  const handleRenameConfirm = async (pack: any) => {
+  const handleRenameConfirm = async (pack: any): Promise<boolean> => {
     const trimmed = renameValue.trim();
     if (!trimmed) {
       toast.error("Pack name cannot be empty");
-      return;
+      return false;
     }
     if (trimmed === pack.name) {
       handleRenameCancel();
-      return;
+      return false;
     }
-
-    // Optimistic update
-    setPacks(prev => prev.map(p => p.id === pack.id ? { ...p, name: trimmed } : p));
-    setRenamingPackId(null);
-    setRenameValue("");
 
     const { data, error } = await supabase
       .from("word_packs")
@@ -306,20 +299,18 @@ export default function PacksPage() {
       .select();
 
     if (error) {
-      // Revert optimistic update
-      setPacks(prev => prev.map(p => p.id === pack.id ? { ...p, name: pack.name } : p));
       toast.error("Failed to rename pack: " + error.message);
-      return;
+      return false;
     }
 
     // RLS denial: update succeeded but returned no rows
     if (!data || data.length === 0) {
-      setPacks(prev => prev.map(p => p.id === pack.id ? { ...p, name: pack.name } : p));
       toast.error("Could not rename pack — permission denied");
-      return;
+      return false;
     }
 
-    toast.success("Pack renamed");
+    setPacks(prev => prev.map(p => p.id === pack.id ? { ...p, name: trimmed } : p));
+    return true;
   };
 
   const displayedPacks = useMemo(() => {
@@ -519,9 +510,13 @@ export default function PacksPage() {
                       <button onClick={() => setIsPreviewing(false)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200">
                         Back to Filters
                       </button>
-                      <button onClick={handleCreateSmartPack} className="px-6 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700">
+                      <TickButton
+                        onAction={handleCreateSmartPack}
+                        onDone={() => { setIsCreatingSmart(false); setIsPreviewing(false); setName(""); }}
+                        className="px-6 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 flex items-center justify-center"
+                      >
                         Save Pack
-                      </button>
+                      </TickButton>
                     </div>
                   </div>
                 )}
@@ -671,20 +666,24 @@ export default function PacksPage() {
                           type="text"
                           value={renameValue}
                           onChange={e => setRenameValue(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === "Enter") handleRenameConfirm(pack);
+                          onKeyDown={async e => {
+                            if (e.key === "Enter") {
+                              const ok = await handleRenameConfirm(pack);
+                              if (ok) handleRenameCancel();
+                            }
                             if (e.key === "Escape") handleRenameCancel();
                           }}
                           autoFocus
                           className="flex-1 min-w-0 text-sm font-bold border border-blue-400 rounded px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-900"
                         />
-                        <button
-                          onClick={() => handleRenameConfirm(pack)}
-                          className="p-1 text-green-600 hover:bg-green-50 rounded transition flex-shrink-0"
+                        <TickButton
+                          onAction={() => handleRenameConfirm(pack)}
+                          onDone={handleRenameCancel}
+                          className="p-1 text-green-600 hover:bg-green-50 rounded transition flex-shrink-0 flex items-center justify-center"
                           title="Confirm rename"
                         >
                           <Check className="w-3.5 h-3.5" />
-                        </button>
+                        </TickButton>
                         <button
                           onClick={handleRenameCancel}
                           className="p-1 text-gray-400 hover:bg-gray-100 rounded transition flex-shrink-0"

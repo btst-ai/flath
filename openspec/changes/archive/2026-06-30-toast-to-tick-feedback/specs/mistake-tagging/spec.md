@@ -1,8 +1,5 @@
-# mistake-tagging Specification
+## MODIFIED Requirements
 
-## Purpose
-Defines how a word is marked as a mistake — via a one-tap quick action or the AddWordModal "Add a mistake" checkbox — recording a `forgot` attempt and recomputing aggregates so the word ranks down and surfaces in Mistake Fix remediation.
-## Requirements
 ### Requirement: Mark a word as a mistake
 The system SHALL provide a single action to mark any word as a mistake. Marking a word as a mistake SHALL record one attempt with outcome `forgot` and SHALL recompute that word's aggregates so it ranks down and becomes eligible for Mistake Fix remediation. The success feedback SHALL be delivered as an inline green tick on the triggering button; no top-right success toast SHALL appear. Error feedback SHALL still surface as a top-right error toast.
 
@@ -24,4 +21,3 @@ The AddWordModal SHALL include an "Add a mistake" checkbox that defaults to chec
 #### Scenario: Create with checkbox unchecked
 - **WHEN** the user unchecks "Add a mistake" and adds the word
 - **THEN** the word is created with no mistake attempt recorded, the Add button shows a green tick, and no top-right success toast appears
-

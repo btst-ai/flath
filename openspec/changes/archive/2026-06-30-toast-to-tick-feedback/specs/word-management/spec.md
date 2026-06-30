@@ -1,8 +1,5 @@
-# word-management Specification
+## MODIFIED Requirements
 
-## Purpose
-Covers managing words and word packs: the add/edit modals expose no frequency field (rank stays auto-derived), word packs can be renamed by their owner, and words can be archived/removed inline from the My Library and "Added by others" lists.
-## Requirements
 ### Requirement: No frequency field in word modals
 The AddWordModal SHALL NOT display a Frequency or Difficulty field. New words SHALL still receive an automatically derived frequency rank. The EditWordModal SHALL display a Difficulty selector (easy / medium / hard / niche); saving a change to the selector SHALL update the word's `frequency_rank` to the corresponding bucket midpoint (easy=500, medium=2000, hard=4500, niche=8000). Success feedback for saving via EditWordModal SHALL be an inline green tick on the Save button before the modal closes; no top-right success toast SHALL appear.
 
@@ -35,4 +32,3 @@ The system SHALL provide a per-row action to archive/remove a word directly from
 #### Scenario: Remove from Added by others row
 - **WHEN** the user triggers the inline remove action on an "Added by others" row
 - **THEN** the word is moved to the user's removed/archived set and the remove button briefly shows a green tick
-
