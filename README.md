@@ -24,6 +24,7 @@ flath/
 - **Practice** — adaptive sessions with two tracks: recognition (Greek → French) and production (French → Greek). Mixed mode uses a dynamic modality randomizer: baseline 70% Production bias, continuously adjusted by the delta between recent Production and Recognition failures over the last 14 days, so whichever track is currently weaker gets more cards. Exclude successful words (>75% in last 7 days) and/or words reviewed today. Per-state progress (Known / Not seen / Retry) plus an iteration counter for recycled passes. A 5-second retention intercept blocks input on missed cards so the correct answer registers. Hard-won wins (first-attempt correct on historically tough words) get a 🎉 marker on the session recap.
 - **Word Packs** — manual or smart (filter-based) packs. Scope a practice session to a pack.
 - **Duel** — real-time multiplayer vocabulary battle. Two players race through shared words. Desktop only.
+- **Progress** — dashboard streak metric (with one-day grace), two header metrics (distinct words last 7 days, longest streak), and a `/progress` page with a 30-day activity chart, struggling/forgetting word lists, production vs recognition weighted averages, theme breakdown, words-added stacked bar, and duel W/L/T summary.
 - **PWA** — installable on Android via Chrome "Add to Home Screen". Runs fullscreen with no browser chrome.
 
 ---
@@ -121,6 +122,33 @@ This prints the current PoS distribution and lists any rows that would be rewrit
 ---
 
 ## Changelog
+
+### Phase 3.6 — Progress tracker (June 2026)
+
+**Dashboard**
+- Streak metric row added below the header: current streak (days), a "Day N+1 in reach" label when not yet studied today, and longest streak.
+- Two additional header metrics: distinct words practised in the last 7 days, and longest all-time streak.
+- "Show Progress" button links to `/progress`.
+
+**Progress page (`/progress`)**
+- 30-day activity line chart: daily `know` attempt count (green) vs `forgot` count (red), hand-rolled SVG.
+- Struggling words list: bottom 5 by weighted success rate (blend of production and recognition), sampled via roulette-wheel so different words surface on each visit.
+- Forgetting words list: 5 words with the most recent `forgot` attempts, similarly sampled.
+- Production vs recognition averages: two large weighted-average numbers derived from `avg_success_rate_prod` / `avg_success_rate_rec` on `user_word_settings`.
+- Theme breakdown pie chart: word count per theme, SVG.
+- Words added over time stacked bar chart: words added per day over the last 30 days, SVG.
+- Duel W/L/T summary: counts from the `duels` table.
+- Unauthenticated access redirects to `/login`.
+
+**Stats helpers (`lib/progressStats.ts`)**
+- Pure functions with zero side effects: `computeStreak`, `weightedBlendSuccess`, `weightedAverage`, `weightedSample`, `buildStrugglingPool`, `buildForgettingPool`, `bucketByDay`.
+- `weightedSample` accepts an injectable `rng` so tests are deterministic; production passes `Math.random`.
+
+**Tests**
+- First unit test suite in the repo: 32 tests via [vitest](https://vitest.dev) (`npm test`). `vitest.config.ts` added at `flath-app/` root.
+- Zero new runtime dependencies; vitest is devDep only.
+
+---
 
 ### Phase 3.5 — Flash fix, in-session vault, mistake tagging, vault/pack fixes (June 2026)
 
