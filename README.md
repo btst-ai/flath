@@ -123,6 +123,20 @@ This prints the current PoS distribution and lists any rows that would be rewrit
 
 ## Changelog
 
+### Phase 3.6.1 — Progress tracker bugfixes (June 2026)
+
+**Bug fixes**
+- Production vs recognition rates now display as valid percentages (e.g. 57%, not 5670%). Root cause: the stored 0-100 scale was being multiplied by 100 a second time at render. Gap copy and threshold corrected to match.
+- Streak "No streak yet" despite recent activity: the previous query hit PostgREST's default 1000-row cap on high-volume history, silently truncating today's rows. Replaced with a `streak_dates()` Postgres RPC that returns O(days) distinct dates — cap-immune. Add order+limit guards to the 30-day and 7-day attempt queries.
+- Words-added stacked bar showed all-zero bars: label generation used `"MM-DD"` but matching used `"MM/DD"` — every word was skipped. Fixed to use dashes consistently.
+- Struggling/forgetting word lists had corrupted sampling weights: `(1 - blend) + 0.1` went negative when `blend` was ~50 on the 0-100 scale. Fixed to `(1 - blend/100) + 0.1`.
+
+**Tests** — 34 tests (up from 32). Unit test fixtures updated to the 0-100 production scale; two regression tests added for weight boundary values.
+
+**SQL** — `sql/add_streak_rpc.sql` added. Run once in Supabase SQL Editor to deploy the `streak_dates()` RPC. Re-run `sql/add_added_at.sql` backfill if `added_at` is NULL on legacy rows, then `ALTER TABLE public.user_word_settings ALTER COLUMN added_at SET NOT NULL`.
+
+---
+
 ### Phase 3.6 — Progress tracker (June 2026)
 
 **Dashboard**
