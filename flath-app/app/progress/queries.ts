@@ -44,7 +44,8 @@ export async function fetchWordsAdded7d(userId: string): Promise<number> {
     .from("user_word_settings")
     .select("word_id", { count: "exact" })
     .eq("user_id", userId)
-    .gte("added_at", since);
+    .gte("added_at", since)
+    .or("added_at.lt.2026-06-28T00:00:00.000Z,added_at.gte.2026-06-29T00:00:00.000Z");
 
   if (error) {
     toast.error("Failed to load words added");
@@ -158,7 +159,8 @@ export async function fetchWordsAddedLast30d(userId: string): Promise<WordAddedR
     .from("user_word_settings")
     .select("added_at, words_dim(theme)")
     .eq("user_id", userId)
-    .gte("added_at", since);
+    .gte("added_at", since)
+    .or("added_at.lt.2026-06-28T00:00:00.000Z,added_at.gte.2026-06-29T00:00:00.000Z");
 
   if (error) {
     toast.error("Failed to load vocabulary additions");

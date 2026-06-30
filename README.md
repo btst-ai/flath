@@ -142,6 +142,9 @@ This prints the current PoS distribution and lists any rows that would be rewrit
 - "This week" header added above the three-metric grid.
 - Zero-activity state (streak = 0, no words seen, no words added in 7 days) shows "Let's get started" header with `0` for all counters instead of `—`.
 
+**Data fix**
+- Words-added queries (dashboard 7-day counter and `/progress` stacked bar) now exclude June 28 2026. That date was a one-off `added_at` backfill run that stamped all pre-existing vocabulary rows, not real additions.
+
 ---
 
 ### Phase 3.6.1 — Progress tracker bugfixes (June 2026)
