@@ -836,7 +836,7 @@ function PracticeSession() {
               </div>
               
               {/* Interest Buttons */}
-              <div className="absolute bottom-8 w-full px-8 flex justify-between items-center gap-2">
+              <div className="absolute bottom-8 w-full px-6 md:px-8 flex justify-between items-center gap-2">
                 <button
                   onClick={(e) => handleInterest(e, "fav")}
                   className={`p-3 rounded-full transition-colors ${currentInterestToggle === "fav" ? "bg-yellow-500/20 text-yellow-400" : "bg-gray-800 text-gray-400 hover:text-yellow-400 hover:bg-gray-700"}`}
