@@ -243,15 +243,12 @@ export default function ProgressPage() {
 
     // Streak label
     const sr = computeStreak(streakDates, nowDate);
-    if (sr.streak === 0) {
+    if (sr.streak === 0 && sr.missed === 0) {
       setStreakLabel("No streak yet");
     } else {
-      const missedStr = sr.missed > 0 ? ` · ${sr.missed} missed` : "";
-      setStreakLabel(
-        sr.studiedToday
-          ? `${sr.streak} day streak 🔥${missedStr}`
-          : `Day ${sr.streak + 1} in reach${missedStr}`
-      );
+      const missedPart = sr.missed > 0 ? ` (🥶: ${sr.missed})` : "";
+      const streakStr = sr.studiedToday ? `${sr.streak}` : `${sr.streak}⏳`;
+      setStreakLabel(`🔥: ${streakStr}${missedPart}`);
     }
 
     // Line chart

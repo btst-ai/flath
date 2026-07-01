@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { motion } from "framer-motion";
-import { Check, X, HelpCircle, StopCircle, Star, Archive, Edit2, Copy, Search, BookOpen } from "lucide-react";
+import { Check, X, HelpCircle, StopCircle, Star, Archive, Edit2, Copy, Search, BookOpen, SkipForward } from "lucide-react";
 import { submitSessionAttempts, getLastAttemptOutcomes, getModalityFailureCounts } from "@/app/actions/session";
 import { EditWordModal, getDifficultyFromRank } from "@/components/EditWordModal";
 import { InSessionVaultDrawer } from "@/components/InSessionVaultDrawer";
@@ -121,6 +121,36 @@ function PracticeSession() {
       setLiveMessage(`Review ${iteration}`);
     }
   }, [iteration]);
+
+  const handleSkip = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (queue.length <= 1 || isLocked) return;
+    const currentWord = queue[0];
+
+    setFlipped(false);
+    setTimeout(() => {
+      setQueue(prev => {
+        if (prev.length === 0) return prev;
+        const [head, ...rest] = prev;
+        const newQueue = [...rest, head];
+
+        setPassStartIds(passIds => {
+          const filtered = passIds.filter(id => id !== head.word_id);
+          if (filtered.length === 0) {
+            // This was the last card of the pass — start next pass with the deferred card
+            setIteration(i => i + 1);
+            setShowIterationSplash(true);
+            setSeenWordIds(new Set());
+            setMehWordIds(new Set());
+            return newQueue.map(w => w.word_id);
+          }
+          return filtered;
+        });
+
+        return newQueue;
+      });
+    }, 150);
+  };
 
   const handleInterest = async (e: React.MouseEvent, interaction: "fav" | "up" | "down" | "archive") => {
     e.stopPropagation();
@@ -836,7 +866,7 @@ function PracticeSession() {
               </div>
               
               {/* Interest Buttons */}
-              <div className="absolute bottom-8 w-full px-6 md:px-8 flex justify-between items-center gap-2">
+              <div className="absolute bottom-8 left-6 right-6 md:left-8 md:right-8 flex justify-between items-center gap-2">
                 <button
                   onClick={(e) => handleInterest(e, "fav")}
                   className={`p-3 rounded-full transition-colors ${currentInterestToggle === "fav" ? "bg-yellow-500/20 text-yellow-400" : "bg-gray-800 text-gray-400 hover:text-yellow-400 hover:bg-gray-700"}`}
@@ -868,14 +898,24 @@ function PracticeSession() {
                     Show more
                   </button>
                 </div>
-                <button
-                  onClick={(e) => handleInterest(e, "archive")}
-                  className={`p-3 rounded-full transition-colors ${currentInterestToggle === "archive" ? "bg-red-500/20 text-red-500" : "bg-gray-800 text-gray-400 hover:text-red-500 hover:bg-gray-700"}`}
-                  title="Archive"
-                  aria-label="Archive word"
-                >
-                  <Archive className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSkip}
+                    className="p-3 rounded-full transition-colors bg-gray-800 text-gray-400 hover:text-blue-400 hover:bg-gray-700"
+                    title="Skip — defer to next pass"
+                    aria-label="Skip word to next pass"
+                  >
+                    <SkipForward className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={(e) => handleInterest(e, "archive")}
+                    className={`p-3 rounded-full transition-colors ${currentInterestToggle === "archive" ? "bg-red-500/20 text-red-500" : "bg-gray-800 text-gray-400 hover:text-red-500 hover:bg-gray-700"}`}
+                    title="Archive"
+                    aria-label="Archive word"
+                  >
+                    <Archive className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
             </div>
           </motion.div>

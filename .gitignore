@@ -17,6 +17,11 @@ build/
 .env.test
 .env.production
 
+# Claude Code
+.claude/
+flath-app/.claude/
+!flath-app/.claude/launch.json
+
 # Editor directories and files
 .cursor/
 .vscode/

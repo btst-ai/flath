@@ -132,14 +132,15 @@ export interface DuelRow {
   p2_user_id: string | null;
 }
 
-// Fetch duels from the last 30 days where user was p1 or p2.
+// Fetch duels from the last 30 days where user was p1 or p2, excluding duels with fewer than 3 cards shown.
 export async function fetchDuelSummary(userId: string): Promise<DuelRow[]> {
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
     .from("duels")
-    .select("winner, p1_user_id, p2_user_id")
+    .select("winner, p1_user_id, p2_user_id, total_cards")
     .or(`p1_user_id.eq.${userId},p2_user_id.eq.${userId}`)
-    .gte("ts_finished", since);
+    .gte("ts_finished", since)
+    .gte("total_cards", 3);
 
   if (error) {
     toast.error("Failed to load duel history");

@@ -74,10 +74,10 @@ export default function Home() {
   const streakLabel = (): string => {
     if (!streakResult) return "—";
     const { streak, missed, studiedToday } = streakResult;
-    if (streak === 0) return "No streak yet";
-    const missedStr = missed > 0 ? ` · ${missed} missed` : "";
-    if (studiedToday) return `${streak} day streak 🔥${missedStr}`;
-    return `Day ${streak + 1} in reach${missedStr}`;
+    if (streak === 0 && missed === 0) return "No streak yet";
+    const missedPart = missed > 0 ? ` (🥶: ${missed})` : "";
+    const streakStr = studiedToday ? `${streak}` : `${streak}⏳`;
+    return `🔥: ${streakStr}${missedPart}`;
   };
 
   const noActivity = (streakResult?.streak ?? 0) === 0 && !distinctWords7d && !wordsAdded7d;
